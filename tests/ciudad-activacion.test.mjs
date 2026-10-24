@@ -186,3 +186,12 @@ test('el filtro del listado normaliza la ciudad igual que la exportación', () =
   assert.match(cuerpo, /coincidePlaza/, 'la ciudad sigue siendo un criterio del filtro geográfico')
   assert.doesNotMatch(cuerpo, /plaza_efectiva_registro/)
 })
+
+test('el filtro de ciudad une las plazas activas aunque no tengan activaciones', () => {
+  assert.match(metricsSource, /portalRequest\('\/portal\/plazas'\)/)
+  const inicio = metricsSource.indexOf('for (const plaza of plazasCatalogo.value)')
+  const cuerpo = metricsSource.slice(inicio, metricsSource.indexOf('}\n', inicio + 200))
+  assert.match(cuerpo, /`pkey:\$\{clave\}`/)
+  assert.match(cuerpo, /plazas\.set\(key, \{ key, nombre \}\)/)
+  assert.match(cuerpo, /!plazas\.has\(key\)/)
+})

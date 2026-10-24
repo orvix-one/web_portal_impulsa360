@@ -23,6 +23,7 @@ watch([filtroDesde, filtroHasta, filtroPlaza, filtroActivador, filtroTipo, filtr
 // admin lo recibe completo; líder/banco lo reciben recortado por el backend).
 // Relaciona usuario_id con su líder actual sin ampliar las activaciones autorizadas.
 const usuariosCatalogo = ref([])
+const plazasCatalogo = ref([])
 const usuariosPorId = computed(() => new Map(usuariosCatalogo.value.map((usuario) => [texto(usuario.usuario_id).toLowerCase(), usuario])))
 function rolesCatalogo(usuario) {
   if (Array.isArray(usuario?.roles)) return usuario.roles.map((rol) => String(rol ?? '').trim().toLowerCase())
@@ -62,12 +63,14 @@ onMounted(async () => {
   loading.value = true
   errorMsg.value = null
   try {
-    const [rows, usersPayload] = await Promise.all([
+    const [rows, usersPayload, plazasPayload] = await Promise.all([
       fetchAllActivaciones(),
       portalRequest('/portal/users'),
+      portalRequest('/portal/plazas').catch((error) => { logClientError('metricas.plazas', error); return null }),
     ])
     activaciones.value = rows
     usuariosCatalogo.value = usersPayload?.users ?? []
+    plazasCatalogo.value = plazasPayload?.plazas ?? []
   }
   catch (error) { logClientError('metricas.fetch', error); errorMsg.value = 'No fue posible obtener las activaciones.' }
   finally { loading.value = false }
@@ -303,6 +306,13 @@ const opciones = computed(() => {
     if (lider !== 'none' && !lideres.has(lider)) lideres.set(lider, { key: lider, nombre: liderEtiqueta(item, lider) })
     const key = equipoKey(item)
     if (!equipos.has(key)) equipos.set(key, { key, nombre: equipoEtiqueta(item, key) })
+  }
+  for (const plaza of plazasCatalogo.value) {
+    const nombre = texto(plaza.nombre)
+    const clave = normalizarPlazaClave(nombre)
+    if (!clave) continue
+    const key = `pkey:${clave}`
+    if (!plazas.has(key)) plazas.set(key, { key, nombre })
   }
   // Hace seleccionables también los equipos e integrantes sin registros.
   for (const usuario of catalogoActivadores.value) {

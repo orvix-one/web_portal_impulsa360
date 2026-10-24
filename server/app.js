@@ -1490,6 +1490,15 @@ export function createAdminApiApp({ env = process.env } = {}) {
     const { auth_user_id, ...safeProfile } = profile ?? {}
     res.json({ profile: safeProfile })
   }))
+  app.get('/portal/plazas', asyncRoute(async (_req, res) => {
+    const { data, error } = await adminSupabase.from('plazas').select('id,nombre').eq('activa', true).order('nombre')
+    if (error) {
+      if (isMissingOrganizationSchema(error)) { res.json({ plazas: [] }); return }
+      jsonError(res, 500, 'No se pudo obtener las plazas.', error.message)
+      return
+    }
+    res.json({ plazas: data ?? [] })
+  }))
   app.get('/portal/users', asyncRoute(async (req, res) => {
     let query = adminSupabase.from('activadores').select('*').order('nombre')
     if (req.portalUser.rol === 'lider') query = query.eq('lider_id', req.portalUser.usuario_id)
