@@ -1158,7 +1158,7 @@ button:disabled,
   position: fixed;
   top: 14px;
   right: 14px;
-  z-index: 120;
+  z-index: 140;
   width: min(360px, calc(100vw - 22px));
   display: grid;
   gap: 0.56rem;
