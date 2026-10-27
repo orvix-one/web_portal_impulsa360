@@ -19,12 +19,12 @@ Ver la cabecera de `scripts/performance.mjs` (`npm run performance`).
 
 Completar al correr el script. Fecha / commit / región de la función de Vercel en cada columna.
 
-| Medición | Antes (2026-10-27, prod) | Tras región (____) | Fase 1 | Fase 2 |
+| Medición | Antes (2026-10-27, prod) | Tras región gru1 (2026-10-27) | Fase 1 | Fase 2 |
 |---|---|---|---|---|
-| `/portal/me` p50 / p95 | 1343 / 2175 ms | | | |
-| `/portal/users` p50 / p95 | 3260 / 3519 ms (143 KB) | | | |
-| Carga completa `/portal/activations` p50 / p95 | 27494 / 30947 ms (3475 filas, 4 págs, 11.7 MB) | | | |
-| Página de activaciones: `auth` / `db` / `email` / `sign` (ms) | | | | |
+| `/portal/me` p50 / p95 | 1343 / 2175 ms | 405 / 665 ms | | |
+| `/portal/users` p50 / p95 | 3260 / 3519 ms (143 KB) | 534 / 597 ms | | |
+| Carga completa `/portal/activations` p50 / p95 | 27494 / 30947 ms (3475 filas, 4 págs, 11.7 MB) | 5845 / 7897 ms | | |
+| Página de activaciones: `auth` / `db` / `email` / `sign` (ms) | n/d | 70 / 162 / 36 / 732 (total 1042) | | |
 | Activaciones, navegador, frío / tibio | | | | |
 | Métricas, navegador, frío / tibio | | | | |
 
