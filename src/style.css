@@ -2058,3 +2058,16 @@ button:disabled,
   padding: 0.5rem 0.78rem;
   white-space: nowrap;
 }
+
+.activaciones-paginacion {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.tabla-cargando {
+  opacity: 0.55;
+  transition: opacity 0.15s ease;
+}

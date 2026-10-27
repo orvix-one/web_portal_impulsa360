@@ -46,7 +46,7 @@ function matchesTextFilters(row, filters) {
     mismaCiudad(etiquetaCiudadActivacion(row), filters.plaza)
 }
 
-async function fetchActivaciones(adminSupabase, filters, alcance) {
+export async function fetchActivaciones(adminSupabase, filters, alcance) {
   const rows = []
   for (let from = 0; ; from += PAGE_SIZE) {
     let query = adminSupabase.from('activaciones').select('*').order('created_at', { ascending: false })

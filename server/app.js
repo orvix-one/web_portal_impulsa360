@@ -1,8 +1,10 @@
 import crypto from 'node:crypto'
 import express from 'express'
 import { createClient } from '@supabase/supabase-js'
-import { generateActivacionesExcel } from './activacionesExcel.js'
-import { aplicarAlcanceLider, esUuid } from './alcanceLider.js'
+import { fetchActivaciones, generateActivacionesExcel } from './activacionesExcel.js'
+import { aplicarAlcanceLider, esUuid, resolverAlcanceLider } from './alcanceLider.js'
+import { aplicarFiltrosActivaciones, crearCatalogoCiudades, normalizarFiltros, resolverCiudadesFiltro } from './activacionesFiltros.js'
+import { crearResolutorColumnasListado, parsearPagina } from './activacionesListado.js'
 import { serverTimingMiddleware } from './serverTiming.js'
 import {
   activationClassificationUpdate,
@@ -1592,6 +1594,75 @@ export function createAdminApiApp({ env = process.env, adminSupabase: injectedSu
     res.setHeader('X-Export-Images', 'links')
     res.setHeader('X-Export-Version', 'links-v2')
     res.send(Buffer.from(result.buffer))
+  }))
+
+  // Listado paginado: columnas livianas, filtros en SQL, sin firmar fotos ni buscar correos.
+  const obtenerCiudades = crearCatalogoCiudades(adminSupabase)
+  const resolverColumnasListado = crearResolutorColumnasListado(adminSupabase)
+  app.get('/portal/activations/page', asyncRoute(async (req, res) => {
+    const filtros = normalizarFiltros(req.query)
+    const { page, pageSize } = parsearPagina(req.query)
+    const { alcance, error: teamError } = await req.timing.measure('team', () => resolverAlcanceLider(adminSupabase, req.portalUser))
+    if (teamError) { jsonError(res, 500, 'No se pudo resolver el equipo.', teamError.message); return }
+    const ciudades = await req.timing.measure('ciudades', () => resolverCiudadesFiltro(obtenerCiudades, filtros))
+    const columnas = await req.timing.measure('columnas', resolverColumnasListado)
+    const construir = (select, options) => {
+      let query = adminSupabase.from('activaciones').select(select, options)
+      query = aplicarFiltrosActivaciones(query, filtros, ciudades)
+      return query && alcance ? aplicarAlcanceLider(query, alcance) : query
+    }
+    const base = construir(columnas, { count: 'exact' })
+    if (!base) { res.json({ activations: [], total: 0, page, pageSize }); return }
+    const from = (page - 1) * pageSize
+    const { data, count, error } = await req.timing.measure('db', () => base
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, from + pageSize - 1))
+    if (error?.code === 'PGRST103') {
+      const { count: total } = await construir('id', { count: 'exact', head: true })
+      res.json({ activations: [], total: total ?? 0, page, pageSize })
+      return
+    }
+    if (error) { jsonError(res, 500, 'No se pudo obtener activaciones.', error.message); return }
+    res.json({ activations: data ?? [], total: count ?? 0, page, pageSize })
+  }))
+
+  // Filas completas del corte filtrado para CSV y Excel del navegador. Sin firmar fotos:
+  // solo enlaces de evidencia (HMAC en memoria).
+  app.get('/portal/activations/export-rows', asyncRoute(async (req, res) => {
+    const { alcance, error: teamError } = await resolverAlcanceLider(adminSupabase, req.portalUser)
+    if (teamError) { jsonError(res, 500, 'No se pudo resolver el equipo.', teamError.message); return }
+    const rows = await fetchActivaciones(adminSupabase, normalizarFiltros(req.query), alcance)
+    const conCorreo = await attachActivationCreatorEmail(adminSupabase, rows)
+    res.setHeader('Cache-Control', 'private, no-store, max-age=0')
+    res.json({
+      activations: conCorreo.map((row) => ({
+        ...row,
+        foto_url_evidencia: buildEvidenceLinkPath(env.EVIDENCE_LINK_SECRET, row, 'principal', activacionesBucket),
+        foto_cash_in_evidencia: buildEvidenceLinkPath(env.EVIDENCE_LINK_SECRET, row, 'cash-in', activacionesBucket),
+      })),
+    })
+  }))
+
+  // Detalle de una activacion con correo y fotos firmadas (solo esta fila).
+  app.get('/portal/activations/:id', asyncRoute(async (req, res) => {
+    const id = String(req.params.id ?? '')
+    if (!esUuid(id)) { jsonError(res, 400, 'Identificador de activacion invalido.'); return }
+    const { alcance, error: teamError } = await resolverAlcanceLider(adminSupabase, req.portalUser)
+    if (teamError) { jsonError(res, 500, 'No se pudo resolver el equipo.', teamError.message); return }
+    let query = adminSupabase.from('activaciones').select('*').eq('id', id)
+    if (alcance) query = aplicarAlcanceLider(query, alcance)
+    if (!query) { jsonError(res, 404, 'Activacion no encontrada.'); return }
+    const { data, error } = await query.maybeSingle()
+    if (error) { jsonError(res, 500, 'No se pudo obtener la activacion.', error.message); return }
+    if (!data) { jsonError(res, 404, 'Activacion no encontrada.'); return }
+    try {
+      const conCorreo = await attachActivationCreatorEmail(adminSupabase, [data])
+      const [activation] = await attachActivationSignedPhotos(adminSupabase, activacionesBucket, conCorreo, env.EVIDENCE_LINK_SECRET)
+      res.json({ activation })
+    } catch (photoError) {
+      jsonError(res, 500, 'No se pudo preparar enlaces seguros de evidencias.', photoError?.message)
+    }
   }))
 
   app.use('/admin', createAdminRateLimiter(ADMIN_RATE_LIMIT), requireAdminBasicAuth)

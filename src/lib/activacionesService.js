@@ -28,3 +28,32 @@ export async function fetchAllActivaciones() {
     if (page.length < 1000) return rows
   }
 }
+
+const CLAVES_FILTRO = ['plaza', 'distrito', 'impulsador', 'fechaDesde', 'fechaHasta']
+
+function filtrosAQuery(filtros = {}) {
+  const params = new URLSearchParams()
+  for (const clave of CLAVES_FILTRO) if (filtros[clave]) params.set(clave, filtros[clave])
+  return params
+}
+
+// Una pagina del listado (columnas livianas, filtros aplicados en el servidor).
+export async function fetchActivacionesPagina({ page = 1, pageSize = 50, filtros } = {}) {
+  const params = filtrosAQuery(filtros)
+  params.set('page', String(page))
+  params.set('pageSize', String(pageSize))
+  const payload = await portalRequest(`/portal/activations/page?${params}`)
+  return { activations: payload.activations ?? [], total: payload.total ?? 0 }
+}
+
+// Fila completa con correo del activador y fotos firmadas.
+export async function fetchActivacionDetalle(id) {
+  const payload = await portalRequest(`/portal/activations/${encodeURIComponent(id)}`)
+  return payload.activation
+}
+
+// Todas las filas del corte filtrado, para CSV y Excel generados en el navegador.
+export async function fetchActivacionesExportacion(filtros) {
+  const payload = await portalRequest(`/portal/activations/export-rows?${filtrosAQuery(filtros)}`)
+  return payload.activations ?? []
+}

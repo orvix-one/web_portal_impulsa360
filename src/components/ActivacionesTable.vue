@@ -1,6 +1,7 @@
 <script setup>
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onBeforeUnmount, onMounted, watch } from 'vue'
 import { adminApiRequest } from '../lib/adminApiClient'
+import { fetchActivacionDetalle, fetchActivacionesExportacion } from '../lib/activacionesService'
 import {
   notifyError,
   notifyInfo,
@@ -11,7 +12,7 @@ import {
 import { isValidEmail, normalizeEmail, normalizeText } from '../lib/textUtils'
 import { useAuth } from '../lib/authStore'
 import { AUTH_ENABLED } from '../lib/featureFlags'
-import { etiquetaCiudadActivacion, normalizarPlazaClave } from '../lib/plazas'
+import { etiquetaCiudadActivacion } from '../lib/plazas'
 import { neutralizeExportRow, neutralizeSpreadsheetFormula } from '../lib/exportSafety'
 import { logClientError } from '../lib/logging'
 import {
@@ -34,8 +35,12 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  total: { type: Number, default: 0 },
+  page: { type: Number, default: 1 },
+  pageSize: { type: Number, default: 50 },
+  loading: { type: Boolean, default: false },
 })
-const emit = defineEmits(['activacion-eliminada', 'activacion-actualizada'])
+const emit = defineEmits(['activacion-eliminada', 'activacion-actualizada', 'filtrar', 'cambiar-pagina'])
 
 const apiBaseUrl = (import.meta.env.VITE_ADMIN_API_URL ?? '/api').replace(/\/$/, '')
 const boliviaDateTimeFormatter = new Intl.DateTimeFormat('es-BO', {
@@ -106,31 +111,31 @@ function normalizeDateOnly(value) {
   return match ? match[1] : ''
 }
 
-const activacionesFiltradas = computed(() => {
-  const plazaQuery = normalizarPlazaClave(filtroPlaza.value)
-  const distritoQuery = normalizeText(filtroDistrito.value)
-  const impulsadorQuery = normalizeText(filtroImpulsador.value)
-  const fechaDesde = normalizeDateOnly(filtroFechaDesde.value)
-  const fechaHasta = normalizeDateOnly(filtroFechaHasta.value)
-  const fechaInicio = fechaDesde && fechaHasta && fechaDesde > fechaHasta ? fechaHasta : fechaDesde
-  const fechaFin = fechaDesde && fechaHasta && fechaDesde > fechaHasta ? fechaDesde : fechaHasta
-
-  return props.activaciones.filter((activacion) => {
-    const plaza = normalizarPlazaClave(getCiudadActivacion(activacion))
-    const distrito = normalizeText(activacion.zona_activacion)
-    const impulsador = normalizeText(activacion.impulsador)
-    const fecha = normalizeDateOnly(activacion.fecha_activacion)
-
-    const coincidePlaza = !plazaQuery || plaza.includes(plazaQuery)
-    const coincideDistrito = !distritoQuery || distrito.includes(distritoQuery)
-    const coincideImpulsador = !impulsadorQuery || impulsador.includes(impulsadorQuery)
-    const coincideDesde = !fechaInicio || (fecha && fecha >= fechaInicio)
-    const coincideHasta = !fechaFin || (fecha && fecha <= fechaFin)
-    const coincideFecha = coincideDesde && coincideHasta
-
-    return coincidePlaza && coincideDistrito && coincideImpulsador && coincideFecha
-  })
+// Los filtros se aplican en el servidor: la tabla muestra solo la pagina recibida.
+const filas = computed(() => props.activaciones)
+const totalPaginas = computed(() => Math.max(1, Math.ceil(props.total / props.pageSize)))
+const rangoVisible = computed(() => {
+  if (!props.total) return '0'
+  const desde = (props.page - 1) * props.pageSize + 1
+  return `${desde}-${Math.min(props.total, desde + props.activaciones.length - 1)}`
 })
+
+function filtrosActuales() {
+  return {
+    plaza: filtroPlaza.value.trim(),
+    distrito: filtroDistrito.value.trim(),
+    impulsador: filtroImpulsador.value.trim(),
+    fechaDesde: filtroFechaDesde.value,
+    fechaHasta: filtroFechaHasta.value,
+  }
+}
+
+let temporizadorFiltros = null
+watch([filtroPlaza, filtroDistrito, filtroImpulsador, filtroFechaDesde, filtroFechaHasta], () => {
+  clearTimeout(temporizadorFiltros)
+  temporizadorFiltros = setTimeout(() => emit('filtrar', filtrosActuales()), 300)
+})
+onBeforeUnmount(() => clearTimeout(temporizadorFiltros))
 
 function csvEscape(value) {
   if (value === null || value === undefined) {
@@ -363,7 +368,24 @@ function getResultado(activacion) {
   return activacion.resultado ?? activacion.estado ?? 'Registrada'
 }
 
-function abrirDetalle(activacion) { activacionSeleccionada.value = activacion }
+const cargandoDetalle = ref(false)
+let solicitudDetalle = 0
+async function abrirDetalle(activacion) {
+  activacionSeleccionada.value = activacion
+  if (!activacion?.id) return
+  const solicitud = ++solicitudDetalle
+  cargandoDetalle.value = true
+  try {
+    const completa = await fetchActivacionDetalle(activacion.id)
+    if (solicitud === solicitudDetalle && completa) activacionSeleccionada.value = completa
+  } catch (error) {
+    if (solicitud !== solicitudDetalle) return
+    logClientError('activaciones.detalle', error)
+    notifyError(getErrorMessage(error))
+  } finally {
+    if (solicitud === solicitudDetalle) cargandoDetalle.value = false
+  }
+}
 function limpiarFotosSeleccionadas() {
   fotoPrincipalArchivo.value = null
   fotoCashInArchivo.value = null
@@ -372,6 +394,8 @@ function limpiarFotosSeleccionadas() {
 }
 function cerrarDetalle() {
   if (guardandoEdicion.value || reemplazandoFoto.value) return
+  solicitudDetalle += 1
+  cargandoDetalle.value = false
   activacionSeleccionada.value = null
   editandoActivacion.value = false
   limpiarFotosSeleccionadas()
@@ -700,14 +724,7 @@ function descargarArchivo({ filename, content, mimeType }) {
 }
 
 function getDatosParaExportar() {
-  const hayFiltros =
-    filtroPlaza.value ||
-    filtroDistrito.value ||
-    filtroImpulsador.value ||
-    filtroFechaDesde.value ||
-    filtroFechaHasta.value
-
-  return hayFiltros ? activacionesFiltradas.value : props.activaciones
+  return fetchActivacionesExportacion(filtrosActuales())
 }
 
 const columnasExportacion = [
@@ -801,8 +818,18 @@ const columnasExcelPersonalizado = [
   ['Remesas', (row) => (row.remesas ? 'Si' : 'No')],
 ]
 
-function exportarACsv() {
-  const datos = getDatosParaExportar()
+async function exportarACsv() {
+  exportandoExcel.value = true
+  let datos
+  try {
+    datos = await getDatosParaExportar()
+  } catch (error) {
+    logClientError('activaciones.export.csv', error)
+    notifyError(getErrorMessage(error))
+    return
+  } finally {
+    exportandoExcel.value = false
+  }
 
   if (!datos.length) {
     notifyInfo('No hay datos para exportar con los filtros actuales.')
@@ -874,14 +901,14 @@ async function exportarAExcelConImagenes() {
 }
 
 async function descargarExcelPersonalizado() {
-  const datos = activacionesFiltradas.value
-  if (!datos.length) {
-    notifyInfo('No hay datos para exportar con los filtros actuales.')
-    return
-  }
-
   exportandoExcel.value = true
   try {
+    const datos = await getDatosParaExportar()
+    if (!datos.length) {
+      notifyInfo('No hay datos para exportar con los filtros actuales.')
+      return
+    }
+
     const ExcelJS = await import('exceljs')
     const workbook = new ExcelJS.Workbook()
     workbook.creator = 'Impulsa 360'
@@ -999,16 +1026,17 @@ async function descargarExcelPersonalizado() {
         >
           {{ exportandoExcel ? 'Generando Excel en servidor...' : 'Exportar Excel + Imagenes' }}
         </button>
-        <button type="button" @click="descargarExcelPersonalizado" class="boton-exportar boton-exportar-excel" :disabled="exportandoExcel || deletingActivationId || !activacionesFiltradas.length">Descargar Excel</button>
+        <button type="button" @click="descargarExcelPersonalizado" class="boton-exportar boton-exportar-excel" :disabled="exportandoExcel || deletingActivationId || !total">Descargar Excel</button>
       </div>
-      <span class="meta-pill">{{ activacionesFiltradas.length }} visibles</span>
+      <span class="meta-pill">{{ loading ? 'Cargando...' : `${total} registros` }}</span>
     </div>
 
-    <p v-if="activacionesFiltradas.length === 0" class="panel-empty">
+    <p v-if="loading && filas.length === 0" class="panel-empty">Cargando activaciones...</p>
+    <p v-else-if="filas.length === 0" class="panel-empty">
       No hay registros para los filtros seleccionados.
     </p>
 
-    <div v-else class="table-wrap activaciones-table-wrap activaciones-resumen-wrap">
+    <div v-else class="table-wrap activaciones-table-wrap activaciones-resumen-wrap" :class="{ 'tabla-cargando': loading }">
       <table class="tabla-activaciones">
         <thead>
           <tr>
@@ -1023,7 +1051,7 @@ async function descargarExcelPersonalizado() {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(activacion, index) in activacionesFiltradas" :key="getRowKey(activacion, index)" class="activacion-row" tabindex="0" @click="abrirDetalle(activacion)" @keydown.enter="abrirDetalle(activacion)">
+          <tr v-for="(activacion, index) in filas" :key="getRowKey(activacion, index)" class="activacion-row" tabindex="0" @click="abrirDetalle(activacion)" @keydown.enter="abrirDetalle(activacion)">
             <td>{{ activacion.fecha_activacion || formatCreatedAtBolivia(activacion.created_at) }}</td>
             <td>{{ formatHoraRegistro(activacion.created_at) }}</td>
             <td>{{ activacion.impulsador || '-' }}</td>
@@ -1041,14 +1069,21 @@ async function descargarExcelPersonalizado() {
       </table>
     </div>
 
+    <div v-if="total > pageSize" class="activaciones-paginacion">
+      <button type="button" class="boton boton-pequeno" :disabled="loading || page <= 1" @click="emit('cambiar-pagina', page - 1)">Anterior</button>
+      <span>{{ rangoVisible }} de {{ total }}</span>
+      <button type="button" class="boton boton-pequeno" :disabled="loading || page >= totalPaginas" @click="emit('cambiar-pagina', page + 1)">Siguiente</button>
+    </div>
+
     <teleport to="body">
       <div v-if="activacionSeleccionada" class="detalle-overlay" @click.self="cerrarDetalle">
         <aside class="detalle-activacion" role="dialog" aria-modal="true" aria-label="Detalle de activacion">
           <header class="detalle-header">
             <div><p class="view-kicker">Registro de activacion</p><h3 class="detalle-title">{{ getClienteComercio(activacionSeleccionada) }}</h3></div>
-            <button v-if="canEditActivaciones && !editandoActivacion" type="button" class="boton boton-editar" :disabled="!activacionSeleccionada.id" @click="iniciarEdicion">Editar</button>
+            <button v-if="canEditActivaciones && !editandoActivacion" type="button" class="boton boton-editar" :disabled="!activacionSeleccionada.id || cargandoDetalle" @click="iniciarEdicion">Editar</button>
             <button type="button" class="detalle-close" aria-label="Cerrar detalle" @click="cerrarDetalle">×</button>
           </header>
+          <p v-if="cargandoDetalle" class="panel-empty">Cargando detalle completo...</p>
           <form v-if="editandoActivacion" class="detalle-body" @submit.prevent="guardarEdicion">
             <fieldset class="edicion-activacion" :disabled="guardandoEdicion || Boolean(reemplazandoFoto)">
               <label v-if="nombreComercialVisible"><span class="field-label">Nombre del cliente o comercio</span><input v-model="formularioEdicion.nombre_comercial" class="input-texto"></label>
