@@ -3,6 +3,7 @@ import express from 'express'
 import { createClient } from '@supabase/supabase-js'
 import { generateActivacionesExcel } from './activacionesExcel.js'
 import { aplicarAlcanceLider, esUuid } from './alcanceLider.js'
+import { serverTimingMiddleware } from './serverTiming.js'
 import {
   activationClassificationUpdate,
   isCreditosEligible,
@@ -977,7 +978,7 @@ function estimateCombinedActivationCapacity({
   }
 }
 
-export function createAdminApiApp({ env = process.env } = {}) {
+export function createAdminApiApp({ env = process.env, adminSupabase: injectedSupabase = null } = {}) {
   assertRequiredEnv(env)
 
   const allowedOrigins = buildAllowedOrigins(env.ADMIN_API_CORS_ORIGIN)
@@ -993,7 +994,7 @@ export function createAdminApiApp({ env = process.env } = {}) {
     configuredStorageLimitBytes == null ? 'supabase_free_default' : 'env_admin_storage_limit_mb'
   const databaseLimitSource =
     configuredDatabaseLimitBytes == null ? 'supabase_free_default' : 'env_admin_database_limit_mb'
-  const adminSupabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+  const adminSupabase = injectedSupabase ?? createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
@@ -1362,7 +1363,7 @@ export function createAdminApiApp({ env = process.env } = {}) {
   }
 
   async function requirePortalAuth(req, res, next) {
-    const profile = await resolvePortalUser(req)
+    const profile = await (req.timing ? req.timing.measure('auth', () => resolvePortalUser(req)) : resolvePortalUser(req))
     if (!profile) { jsonError(res, 401, 'Sesion invalida o usuario sin permisos.'); return }
     req.portalUser = profile
     next()
@@ -1484,7 +1485,7 @@ export function createAdminApiApp({ env = process.env } = {}) {
     return (users ?? []).map(({ auth_user_id, ...rest }) => ({ ...rest, cuenta_acceso_eliminada: auth_user_id == null }))
   }
 
-  app.use('/portal', requirePortalAuth)
+  app.use('/portal', serverTimingMiddleware, requirePortalAuth)
   app.get('/portal/me', asyncRoute(async (req, res) => {
     const [profile] = await attachUserRoles([req.portalUser])
     const { auth_user_id, ...safeProfile } = profile ?? {}
@@ -1533,11 +1534,11 @@ export function createAdminApiApp({ env = process.env } = {}) {
       if (!alcance) { res.json({ activations: [] }); return }
       query = alcance
     }
-    const { data, error } = await query.range(from, to)
+    const { data, error } = await req.timing.measure('db', () => query.range(from, to))
     if (error) { jsonError(res, 500, 'No se pudo obtener activaciones.', error.message); return }
     try {
-      const conCorreo = await attachActivationCreatorEmail(adminSupabase, data ?? [])
-      res.json({ activations: await attachActivationSignedPhotos(adminSupabase, activacionesBucket, conCorreo, env.EVIDENCE_LINK_SECRET) })
+      const conCorreo = await req.timing.measure('email', () => attachActivationCreatorEmail(adminSupabase, data ?? []))
+      res.json({ activations: await req.timing.measure('sign', () => attachActivationSignedPhotos(adminSupabase, activacionesBucket, conCorreo, env.EVIDENCE_LINK_SECRET)) })
     } catch (photoError) {
       jsonError(res, 500, 'No se pudo preparar enlaces seguros de evidencias.', photoError?.message)
     }
