@@ -177,14 +177,14 @@ test('el Excel del servidor filtra y exporta con la misma función de ciudad', (
 })
 
 test('el filtro del listado normaliza la ciudad igual que la exportación', () => {
-  const inicio = componentSource.indexOf('const activacionesFiltradas = computed(')
-  const fin = componentSource.indexOf('\n})', inicio)
-  const cuerpo = componentSource.slice(inicio, fin)
-  assert.match(cuerpo, /const plazaQuery = normalizarPlazaClave\(filtroPlaza\.value\)/)
-  assert.match(cuerpo, /const plaza = normalizarPlazaClave\(getCiudadActivacion\(activacion\)\)/)
-  assert.match(cuerpo, /const coincidePlaza = !plazaQuery \|\| plaza\.includes\(plazaQuery\)/)
-  assert.match(cuerpo, /coincidePlaza/, 'la ciudad sigue siendo un criterio del filtro geográfico')
+  // El filtro vive en el servidor (listado paginado); el navegador ya no filtra filas.
+  const filtros = readFileSync(new URL('../server/activacionesFiltros.js', import.meta.url), 'utf8')
+  const inicio = filtros.indexOf('export function ciudadesQueCoinciden(')
+  const cuerpo = filtros.slice(inicio, filtros.indexOf('\n}', inicio))
+  assert.match(cuerpo, /const clave = normalizarPlazaClave\(consulta\)/)
+  assert.match(cuerpo, /normalizarPlazaClave\(etiquetaCiudadActivacion\(\{ ciudad_activacion: crudo \}\)\)\.includes\(clave\)/)
   assert.doesNotMatch(cuerpo, /plaza_efectiva_registro/)
+  assert.doesNotMatch(componentSource, /const activacionesFiltradas = computed\(/, 'la tabla no filtra en el navegador')
 })
 
 test('el filtro de ciudad une las plazas activas aunque no tengan activaciones', () => {

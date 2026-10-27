@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { startPortal, TOKENS, IDS } from './helpers/portalApp.mjs'
+import { startPortal, TOKENS, IDS, ACT } from './helpers/portalApp.mjs'
 
 // Red de seguridad HTTP: fija el contrato actual de /portal/* antes de refactorizar.
 
@@ -43,7 +43,7 @@ test('GET /portal/activations: admin ve todo, ordenado por created_at DESC e id 
     const { activations } = await (await get('/portal/activations?from=0&to=999', TOKENS.admin)).json()
     assert.deepEqual(
       activations.map((row) => row.id),
-      ['f1', 'f2', 'f3', 'f4', 'f5', 'f6'],
+      [ACT.f1, ACT.f2, ACT.f3, ACT.f4, ACT.f5, ACT.f6],
     )
   }))
 
@@ -52,7 +52,7 @@ test('GET /portal/activations: respeta from/to', () =>
     const { activations } = await (await get('/portal/activations?from=1&to=2', TOKENS.admin)).json()
     assert.deepEqual(
       activations.map((row) => row.id),
-      ['f2', 'f3'],
+      [ACT.f2, ACT.f3],
     )
   }))
 
@@ -61,19 +61,19 @@ test('GET /portal/activations: el lider ve su historico y los nulos de su equipo
     const { activations } = await (await get('/portal/activations?from=0&to=999', TOKENS.lider)).json()
     assert.deepEqual(
       activations.map((row) => row.id),
-      ['f1', 'f2', 'f5'],
+      [ACT.f1, ACT.f2, ACT.f5],
     )
   }))
 
 test('GET /portal/activations: agrega usuario_email y campos de foto firmada/evidencia', () =>
   conPortal(async ({ get, supabase }) => {
     const { activations } = await (await get('/portal/activations?from=0&to=999', TOKENS.admin)).json()
-    const f1 = activations.find((row) => row.id === 'f1')
+    const f1 = activations.find((row) => row.id === ACT.f1)
     assert.equal(f1.usuario_email, 'activador@test.bo')
     assert.match(f1.foto_url_signed, /^https:\/\/signed\.test\/fotos-activaciones\/u1\/a\.jpg/)
     assert.match(f1.foto_cash_in_signed, /u1\/b\.jpg/)
-    assert.match(f1.foto_url_evidencia, /^\/evidencia\/f1\/principal\//)
-    const f3 = activations.find((row) => row.id === 'f3')
+    assert.ok(f1.foto_url_evidencia.startsWith(`/evidencia/${ACT.f1}/principal/`))
+    const f3 = activations.find((row) => row.id === ACT.f3)
     assert.equal(f3.foto_url_signed, null)
     assert.equal(f3.foto_url_evidencia, null)
     assert.equal(supabase.calls.sign.length, 1, 'firma en un solo lote (<=100 rutas)')

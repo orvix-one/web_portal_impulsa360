@@ -18,6 +18,10 @@ function splitTopLevel(text) {
   return parts
 }
 
+function sinComillas(value) {
+  return value.replace(/^"(.*)"$/, '$1').replace(/\\(["\\])/g, '$1')
+}
+
 function evaluarTermino(row, term) {
   const and = term.match(/^and\((.*)\)$/)
   if (and) return splitTopLevel(and[1]).every((part) => evaluarTermino(row, part))
@@ -25,8 +29,26 @@ function evaluarTermino(row, term) {
   const value = rest.join('.')
   if (op === 'eq') return String(row[column]) === value
   if (op === 'is') return value === 'null' ? row[column] == null : false
-  if (op === 'in') return value.slice(1, -1).split(',').filter(Boolean).includes(String(row[column]))
+  if (op === 'in') {
+    const valores = splitTopLevel(value.slice(1, -1)).map(sinComillas)
+    return row[column] != null && valores.includes(String(row[column]))
+  }
   throw new Error(`fakeSupabase: operador no soportado en or(): ${term}`)
+}
+
+// LIKE de Postgres con \ como escape: % = cualquier cadena, _ = un caracter.
+function patronLike(pattern) {
+  let source = ''
+  for (let i = 0; i < pattern.length; i += 1) {
+    const char = pattern[i]
+    if (char === '\\' && i + 1 < pattern.length) {
+      i += 1
+      source += pattern[i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    } else if (char === '%') source += '.*'
+    else if (char === '_') source += '.'
+    else source += char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  }
+  return new RegExp(`^${source}$`, 'is')
 }
 
 function comparar(a, b) {
@@ -71,6 +93,11 @@ class Query {
     this.predicates.push((row) => row[column] != null && row[column] <= value)
     return this
   }
+  ilike(column, pattern) {
+    const regex = patronLike(pattern)
+    this.predicates.push((row) => row[column] != null && regex.test(String(row[column])))
+    return this
+  }
   or(expression) {
     this.db.calls.or.push(expression)
     this.predicates.push((row) => splitTopLevel(expression).some((term) => evaluarTermino(row, term)))
@@ -82,6 +109,10 @@ class Query {
   }
   range(from, to) {
     this.window = [from, to]
+    return this
+  }
+  limit(count) {
+    this.window = [0, count - 1]
     return this
   }
   maybeSingle() {

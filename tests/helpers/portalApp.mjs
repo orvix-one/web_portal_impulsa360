@@ -23,6 +23,10 @@ const perfil = (usuario_id, rol, extra = {}) => ({
   ...extra,
 })
 
+// ids de activacion con formato uuid (el detalle los valida)
+export const ACT = Object.fromEntries([1, 2, 3, 4, 5, 6].map((n) => [`f${n}`, `a0000000-0000-4000-8000-00000000000${n}`]))
+const fila = (n, extra) => ({ id: ACT[`f${n}`], nombre_comercio: null, foto_url: null, foto_cash_in: null, ...extra })
+
 export const TOKENS = {
   admin: 'tok-admin',
   lider: 'tok-lider',
@@ -43,67 +47,66 @@ export function seedTables() {
   ]
   const activador_roles = activadores.map((p) => ({ usuario_id: p.usuario_id, rol: p.rol }))
   const activaciones = [
-    // created_at distinto; f3 y f4 empatan para probar el desempate por id
-    {
-      id: 'f1',
+    // f3 y f4 empatan en created_at para probar el desempate por id
+    fila(1, {
       usuario_id: IDS.activador,
       lider_id_registro: IDS.lider,
       created_at: '2026-10-05T10:00:00Z',
       fecha_activacion: '2026-10-05',
       ciudad_activacion: 'la_paz',
+      impulsador: 'Ana Pérez',
+      zona_activacion: 'Centro',
+      nombre_comercio: 'Tienda Uno',
       foto_url: 'u1/a.jpg',
       foto_cash_in: 'u1/b.jpg',
-    },
-    {
-      id: 'f2',
+    }),
+    fila(2, {
       usuario_id: IDS.ajeno,
       lider_id_registro: IDS.lider,
       created_at: '2026-10-04T10:00:00Z',
       fecha_activacion: '2026-10-04',
       ciudad_activacion: 'el_alto',
+      impulsador: 'Beto Rojas',
+      zona_activacion: 'Zona Sur',
       foto_url: 'u2/a.jpg',
-      foto_cash_in: null,
-    },
-    {
-      id: 'f3',
+    }),
+    fila(3, {
       usuario_id: IDS.activador,
       lider_id_registro: IDS.liderAjeno,
       created_at: '2026-10-03T10:00:00Z',
       fecha_activacion: '2026-10-03',
       ciudad_activacion: 'la_paz',
-      foto_url: null,
-      foto_cash_in: null,
-    },
-    {
-      id: 'f4',
+      impulsador: 'Ana Pérez',
+      zona_activacion: 'Sopocachi',
+    }),
+    fila(4, {
       usuario_id: IDS.ajeno,
       lider_id_registro: IDS.liderAjeno,
       created_at: '2026-10-03T10:00:00Z',
       fecha_activacion: '2026-10-03',
       ciudad_activacion: 'oruro',
-      foto_url: null,
-      foto_cash_in: null,
-    },
-    {
-      id: 'f5',
+      impulsador: 'Beto Rojas',
+      zona_activacion: 'Centro',
+    }),
+    fila(5, {
       usuario_id: IDS.activador,
       lider_id_registro: null,
       created_at: '2026-10-02T10:00:00Z',
       fecha_activacion: '2026-10-02',
       ciudad_activacion: 'la_paz',
+      impulsador: 'Ana Pérez',
+      zona_activacion: 'Centro',
       foto_url: 'u1/c.jpg',
-      foto_cash_in: null,
-    },
-    {
-      id: 'f6',
+    }),
+    fila(6, {
       usuario_id: IDS.ajeno,
       lider_id_registro: null,
       created_at: '2026-10-01T10:00:00Z',
       fecha_activacion: '2026-10-01',
-      ciudad_activacion: 'oruro',
-      foto_url: null,
-      foto_cash_in: null,
-    },
+      ciudad_activacion: null,
+      impulsador: 'Beto Rojas',
+      zona_activacion: 'Zona Sur',
+    }),
   ]
   return { activadores, activador_roles, activaciones, plazas: [{ id: 'p1', nombre: 'La Paz', activa: true }] }
 }
