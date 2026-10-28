@@ -289,7 +289,7 @@ onMounted(async () => {
         <h2 class="subtitulo subtitulo-inline">Historial de Envios</h2>
         <div class="toolbar-actions">
           <span class="meta-pill">{{ notificacionesFiltradas.length }} visibles</span>
-          <button @click="cargarNotificaciones" class="boton">Recargar</button>
+          <button class="boton" @click="cargarNotificaciones">Recargar</button>
         </div>
       </div>
 

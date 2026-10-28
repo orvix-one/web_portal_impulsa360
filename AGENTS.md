@@ -11,12 +11,12 @@
 
 - `npm test` (`node:test`, `tests/*.test.mjs`; one file: `node --test tests/<file>`), `npm run lint`, `npm run build`.
 - `npm run format:check` and lint are a baseline, not gates. Do not reformat files you are not changing.
-- `npm run performance` [temporary, needs removal] needs `PORTAL_BASE_URL` and `PORTAL_TOKEN` (see the script header).
 - CI is Vercel auto-deploying on push to `main`: run test, lint and build before pushing.
 
 ## Docs to trust
 
-- `docs/esquema-remoto.md` (real remote schemas; read one table with `(set -a; . ./.env; set +a; curl -s "$SUPABASE_URL/rest/v1/" -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" | jq '.definitions.<table>')`) and `docs/perf-baseline.md` (temporary measurements and targets).
+- `ARCHITECTURE.md` (layout, practices, wishlist).
+- `docs/esquema-remoto.md` (real remote schemas; read one table with `(set -a; . ./.env; set +a; curl -s "$SUPABASE_URL/rest/v1/" -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" | jq '.definitions.<table>')`)
 - `docs/bitacora_sesion.md` is stale (2026-03).
 
 ## Conventions

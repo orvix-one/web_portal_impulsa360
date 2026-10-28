@@ -11,7 +11,6 @@ import {
 } from '../lib/feedback'
 import { isValidEmail, normalizeEmail, normalizeText } from '../lib/textUtils'
 import { useAuth } from '../lib/authStore'
-import { AUTH_ENABLED } from '../lib/featureFlags'
 import { etiquetaCiudadActivacion } from '../lib/plazas'
 import { neutralizeExportRow, neutralizeSpreadsheetFormula } from '../lib/exportSafety'
 import { logClientError } from '../lib/logging'
@@ -75,12 +74,12 @@ const formularioEdicion = ref({})
 const formularioEdicionInicial = ref({})
 const motivoEdicion = ref('')
 const { session, profile, isAdmin } = useAuth()
-const canAdminister = computed(() => !AUTH_ENABLED || isAdmin.value)
+const canAdminister = isAdmin
 const hasAdminRole = computed(() =>
   profile.value?.rol === 'administrador' || profile.value?.roles?.includes('administrador')
 )
 const canEditActivaciones = computed(() =>
-  Boolean(session.value?.access_token && (!AUTH_ENABLED || hasAdminRole.value))
+  Boolean(session.value?.access_token && hasAdminRole.value)
 )
 
 const opcionesOrg = ref({ available: false, plazas: [] })
@@ -89,7 +88,7 @@ async function cargarOpcionesOrg() {
   try {
     const result = await requestAdmin('/admin/organization-options')
     opcionesOrg.value = result
-  } catch (err) {
+  } catch {
     // no bloquear la edición si falla
     opcionesOrg.value = { available: false, plazas: [] }
   }
@@ -162,11 +161,6 @@ function getFotoUrl(fotoUrl, signedUrl = '') {
   return fotoUrl
 }
 
-function fotoHyperlinkCell(fotoUrl, signedUrl = '') {
-  const url = getFotoUrl(fotoUrl, signedUrl)
-  return url ? { text: 'Ver foto', hyperlink: url } : ''
-}
-
 function absoluteEvidenceUrl(relativePath) {
   if (!relativePath) {
     return ''
@@ -222,13 +216,6 @@ function formatHoraRegistro(value) {
   if (!value) return '-'
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? '-' : boliviaTimeFormatter.format(date)
-}
-
-function formatFechaLegible(value) {
-  const dateOnly = normalizeDateOnly(value)
-  if (!dateOnly) return value ?? ''
-  const [year, month, day] = dateOnly.split('-')
-  return `${day}/${month}/${year}`
 }
 
 function tieneValor(value) {
@@ -574,7 +561,7 @@ function validarEdicion() {
   const textLengthError = validateActivationTextLengths(form)
   if (textLengthError) return textLengthError
   if (form.email_cliente && !isValidEmail(normalizeEmail(form.email_cliente))) return 'Ingresa un correo valido.'
-  if (form.telefono_cliente && !/^\+?[0-9\s()\-]{6,20}$/.test(form.telefono_cliente.trim())) return 'Ingresa un telefono valido.'
+  if (form.telefono_cliente && !/^\+?[0-9\s()-]{6,20}$/.test(form.telefono_cliente.trim())) return 'Ingresa un telefono valido.'
   if (form.es_plaza_temporal && !form.plaza_temporal.trim()) return 'La plaza temporal es obligatoria.'
   if (form.hubo_error && !form.tipo_error) return 'Selecciona el tipo de error.'
   if (form.hubo_error && form.tipo_error === 'Otro' && !form.descripcion_error.trim()) return 'Describe el error.'
@@ -975,19 +962,19 @@ async function descargarExcelPersonalizado() {
     <div class="filtros filtros-grid filtros-activaciones">
       <label>
         <span class="field-label">Fecha desde</span>
-        <input type="date" v-model="filtroFechaDesde" class="input-texto" />
+        <input v-model="filtroFechaDesde" type="date" class="input-texto" />
       </label>
 
       <label>
         <span class="field-label">Fecha hasta</span>
-        <input type="date" v-model="filtroFechaHasta" class="input-texto" />
+        <input v-model="filtroFechaHasta" type="date" class="input-texto" />
       </label>
 
       <label>
         <span class="field-label">Impulsador</span>
         <input
-          type="text"
           v-model="filtroImpulsador"
+          type="text"
           placeholder="Buscar impulsador"
           class="input-texto"
         />
@@ -996,8 +983,8 @@ async function descargarExcelPersonalizado() {
       <label>
         <span class="field-label">Ciudad</span>
         <input
-          type="text"
           v-model="filtroPlaza"
+          type="text"
           placeholder="Buscar ciudad"
           class="input-texto"
         />
@@ -1006,8 +993,8 @@ async function descargarExcelPersonalizado() {
       <label>
         <span class="field-label">Distrito</span>
         <input
-          type="text"
           v-model="filtroDistrito"
+          type="text"
           placeholder="Buscar distrito"
           class="input-texto"
         />
@@ -1016,16 +1003,16 @@ async function descargarExcelPersonalizado() {
 
     <div class="toolbar-line">
       <div class="toolbar-actions">
-        <button type="button" @click="exportarACsv" class="boton-exportar" :disabled="exportandoExcel || deletingActivationId">Exportar CSV</button>
+        <button type="button" class="boton-exportar" :disabled="exportandoExcel || deletingActivationId" @click="exportarACsv">Exportar CSV</button>
         <button
           type="button"
-          @click="exportarAExcelConImagenes"
           class="boton-exportar boton-exportar-excel"
           :disabled="exportandoExcel || deletingActivationId"
+          @click="exportarAExcelConImagenes"
         >
           {{ exportandoExcel ? 'Generando Excel en servidor...' : 'Exportar Excel + Imagenes' }}
         </button>
-        <button type="button" @click="descargarExcelPersonalizado" class="boton-exportar boton-exportar-excel" :disabled="exportandoExcel || deletingActivationId || !total">Descargar Excel</button>
+        <button type="button" class="boton-exportar boton-exportar-excel" :disabled="exportandoExcel || deletingActivationId || !total" @click="descargarExcelPersonalizado">Descargar Excel</button>
       </div>
       <span class="meta-pill">{{ loading ? 'Cargando...' : `${total} registros` }}</span>
     </div>

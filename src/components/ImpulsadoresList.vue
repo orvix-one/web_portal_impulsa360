@@ -1,8 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { portalRequest } from '../lib/activacionesService'
-import { supabase } from '../lib/supabaseClient'
-import { AUTH_ENABLED } from '../lib/featureFlags'
 import { containsNormalized } from '../lib/textUtils'
 import { notifyError, notifyInfo, notifySuccess } from '../lib/feedback'
 import { deduplicarPlazas, mismaPlaza, nombreLegiblePlaza } from '../lib/plazas'
@@ -128,14 +126,8 @@ onMounted(async () => {
   errorMsg.value = null
 
   try {
-    if (AUTH_ENABLED) {
-      const data = await portalRequest('/portal/users')
-      impulsadores.value = data.users ?? []
-    } else {
-      const { data, error } = await supabase.from('activadores').select('*').order('nombre')
-      if (error) throw error
-      impulsadores.value = data ?? []
-    }
+    const data = await portalRequest('/portal/users')
+    impulsadores.value = data.users ?? []
   } catch (error) {
     logClientError('impulsadores.fetch', error)
     errorMsg.value = 'Error al obtener los impulsadores.'

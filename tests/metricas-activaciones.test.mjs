@@ -75,11 +75,9 @@ test('/metrics/activations: el lider recibe exactamente su alcance, igual que el
     assert.deepEqual(ids(metricas).sort(), ids(exportacion).sort())
   }))
 
-test('/metrics/activations responde Server-Timing y no se cachea', () =>
+test('/metrics/activations no se cachea', () =>
   conPortal(async ({ get }) => {
     const response = await get('/portal/metrics/activations', TOKENS.admin)
-    const timing = response.headers.get('server-timing') ?? ''
-    for (const name of ['auth', 'db', 'total']) assert.match(timing, new RegExp(`${name};dur=`))
     assert.match(response.headers.get('cache-control') ?? '', /no-store/)
   }))
 

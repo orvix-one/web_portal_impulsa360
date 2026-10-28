@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { initializeAuth, useAuth } from './lib/authStore'
-import { AUTH_ENABLED } from './lib/featureFlags'
 
 const routes = [
   { path: '/login', component: () => import('./pages/LoginPage.vue'), meta: { public: true } },
@@ -45,7 +44,6 @@ export const router = createRouter({
 })
 
 router.beforeEach(async (to) => {
-  if (!AUTH_ENABLED) return true
   await initializeAuth()
   const { session, profile } = useAuth()
   if (to.meta.public) return profile.value ? '/activaciones' : true

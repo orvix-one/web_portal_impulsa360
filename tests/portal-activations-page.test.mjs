@@ -79,12 +79,6 @@ test('/page: el lider solo ve su alcance, tambien al filtrar', () =>
     assert.deepEqual(sinCiudad.activations, [], 'f6 (sin ciudad) no es del equipo del lider')
   }))
 
-test('/page responde Server-Timing', () =>
-  conPortal(async ({ get }) => {
-    const timing = (await get('/portal/activations/page', TOKENS.admin)).headers.get('server-timing') ?? ''
-    for (const name of ['auth', 'db', 'total']) assert.match(timing, new RegExp(`${name};dur=`))
-  }))
-
 test('/:id devuelve la fila completa con correo y fotos firmadas solo de esa fila', () =>
   conPortal(async ({ get, supabase }) => {
     const { activation } = await json(await get(`/portal/activations/${ACT.f1}`, TOKENS.admin))

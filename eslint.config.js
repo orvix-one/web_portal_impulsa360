@@ -9,11 +9,17 @@ export default [
   ...pluginVue.configs['flat/recommended'],
   prettier,
   {
+    rules: {
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      'vue/multi-word-component-names': 'off',
+    },
+  },
+  {
     files: ['src/**/*.{js,vue}'],
     languageOptions: { globals: { ...globals.browser } },
   },
   {
-    files: ['server/**/*.js', 'api/**/*.js', 'scripts/**/*.mjs', 'tests/**/*.mjs', 'vite.config.js', 'eslint.config.js'],
+    files: ['server/**/*.js', 'api/**/*.js', 'tests/**/*.mjs', 'vite.config.js', 'eslint.config.js'],
     languageOptions: { globals: { ...globals.node } },
   },
 ]

@@ -3,10 +3,10 @@ import express from 'express'
 import { createClient } from '@supabase/supabase-js'
 import { fetchActivaciones, generateActivacionesExcel } from './activacionesExcel.js'
 import { aplicarAlcanceLider, esUuid, resolverAlcanceLider } from './alcanceLider.js'
+import { resolveStorageObjectPathFromFotoUrl } from './storagePaths.js'
 import { aplicarFiltrosActivaciones, crearCatalogoCiudades, normalizarFiltros, resolverCiudadesFiltro } from './activacionesFiltros.js'
 import { SELECT_LISTADO_ACTIVACIONES, parsearPagina } from './activacionesListado.js'
 import { cargarActivacionesMetricas } from './metricasActivaciones.js'
-import { serverTimingMiddleware } from './serverTiming.js'
 import {
   activationClassificationUpdate,
   isCreditosEligible,
@@ -86,73 +86,6 @@ const REQUIRED_ENV = [
 const DEFAULT_ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://localhost:5174',
-  /* Bloque desplazado accidentalmente; se conserva comentado hasta retirarlo del diff.
-    try {
-      // Realizar conteos separados por tabla/columna
-      const equiposRes = await adminSupabase.from('equipos').select('id', { count: 'exact', head: true }).eq('plaza_id', plazaId)
-      const activadoresPlazaIdRes = await adminSupabase.from('activadores').select('usuario_id', { count: 'exact', head: true }).eq('plaza_id', plazaId)
-      const activadoresPlazaBaseRes = await adminSupabase.from('activadores').select('plaza_base', { count: 'exact', head: true }).eq('plaza_base', plazaId)
-      const activacionesPlazaIdRes = await adminSupabase.from('activaciones').select('id', { count: 'exact', head: true }).eq('plaza_id_registro', plazaId)
-      const activacionesPlazaBaseIdRes = await adminSupabase.from('activaciones').select('id', { count: 'exact', head: true }).eq('plaza_base_id_registro', plazaId)
-      const activacionesPlazaEfectivaIdRes = await adminSupabase.from('activaciones').select('id', { count: 'exact', head: true }).eq('plaza_efectiva_id_registro', plazaId)
-      const temporalesRes = await adminSupabase.from('activador_plaza_temporal').select('id', { count: 'exact', head: true }).eq('plaza_temporal_id', plazaId)
-
-      const relations = []
-
-      if (equiposRes.error) relations.push({ table: 'equipos', column: 'plaza_id', error: true })
-      else if ((equiposRes.count ?? 0) > 0) relations.push({ table: 'equipos', column: 'plaza_id', count: equiposRes.count ?? 0 })
-
-      if (activadoresPlazaIdRes.error) relations.push({ table: 'activadores', column: 'plaza_id', error: true })
-      else if ((activadoresPlazaIdRes.count ?? 0) > 0) relations.push({ table: 'activadores', column: 'plaza_id', count: activadoresPlazaIdRes.count ?? 0 })
-
-      // Detectar si plaza_base almacena UUID o texto sin exponer datos
-      let plazaBaseType = 'unknown'
-      try {
-        const sampleValues = await adminSupabase.from('activadores').select('plaza_base').not('plaza_base', 'is', null).limit(10)
-        const values = (sampleValues.data ?? []).map((r) => r.plaza_base).filter(Boolean)
-        const uuidLike = values.some((v) => typeof v === 'string' && /^[0-9a-fA-F-]{36}$/.test(v))
-        plazaBaseType = uuidLike ? 'uuid' : 'text'
-      } catch (_e) {
-        plazaBaseType = 'unknown'
-      }
-
-      if (activadoresPlazaBaseRes.error) relations.push({ table: 'activadores', column: 'plaza_base', error: true })
-      else if (plazaBaseType === 'uuid') {
-        if ((activadoresPlazaBaseRes.count ?? 0) > 0) relations.push({ table: 'activadores', column: 'plaza_base', count: activadoresPlazaBaseRes.count ?? 0 })
-      } else if (plazaBaseType === 'text') {
-        // Si plaza_base es texto, no tratarla como FK a plaza.id; omitir la relación
-      } else {
-        // tipo desconocido: conservadormente marcar como posible error
-        if ((activadoresPlazaBaseRes.count ?? 0) > 0) relations.push({ table: 'activadores', column: 'plaza_base', error: true })
-      }
-
-      if (activacionesPlazaIdRes.error) relations.push({ table: 'activaciones', column: 'plaza_id_registro', error: true })
-      else if ((activacionesPlazaIdRes.count ?? 0) > 0) relations.push({ table: 'activaciones', column: 'plaza_id_registro', count: activacionesPlazaIdRes.count ?? 0 })
-
-      if (activacionesPlazaBaseIdRes.error) relations.push({ table: 'activaciones', column: 'plaza_base_id_registro', error: true })
-      else if ((activacionesPlazaBaseIdRes.count ?? 0) > 0) relations.push({ table: 'activaciones', column: 'plaza_base_id_registro', count: activacionesPlazaBaseIdRes.count ?? 0 })
-
-      if (activacionesPlazaEfectivaIdRes.error) relations.push({ table: 'activaciones', column: 'plaza_efectiva_id_registro', error: true })
-      else if ((activacionesPlazaEfectivaIdRes.count ?? 0) > 0) relations.push({ table: 'activaciones', column: 'plaza_efectiva_id_registro', count: activacionesPlazaEfectivaIdRes.count ?? 0 })
-
-      if (temporalesRes.error) relations.push({ table: 'activador_plaza_temporal', column: 'plaza_temporal_id', error: true })
-      else if ((temporalesRes.count ?? 0) > 0) relations.push({ table: 'activador_plaza_temporal', column: 'plaza_temporal_id', count: temporalesRes.count ?? 0 })
-
-      if (relations.length > 0) {
-        res.status(409).json({ ok: false, deleted: false, message: 'No se puede eliminar la plaza porque tiene información relacionada.', relations })
-        return
-      }
-
-      // No se encontraron relaciones: permitir eliminación física
-      const { error: delErr } = await adminSupabase.from('plazas').delete().eq('id', plazaId)
-      if (delErr) { jsonError(res, 500, 'No se pudo eliminar la plaza.', delErr.message); return }
-      res.json({ ok: true, deleted: true, message: 'Plaza eliminada correctamente.' })
-    } catch (err) {
-      jsonError(res, 500, 'Error verificando relaciones de plaza.', err?.message ?? String(err))
-    }
-  }
-
-  */
 ]
 const ADMIN_RATE_LIMIT = Object.freeze({
   windowMs: 60 * 1000,
@@ -343,6 +276,12 @@ function isOriginAllowed(origin, req, allowedOriginMatchers) {
 
   const requestOrigin = getRequestOrigin(req)
   return Boolean(requestOrigin && requestOrigin === origin)
+}
+
+function sinCache(res) {
+  res.setHeader('Cache-Control', 'private, no-store, max-age=0')
+  res.setHeader('CDN-Cache-Control', 'no-store')
+  res.setHeader('Vercel-CDN-Cache-Control', 'no-store')
 }
 
 function jsonError(res, statusCode, message, details) {
@@ -573,76 +512,6 @@ function resolveActivacionesBucket(env) {
   }
 
   return 'fotos-activaciones'
-}
-
-function decodeURIComponentSafe(value) {
-  try {
-    return decodeURIComponent(value)
-  } catch {
-    return value
-  }
-}
-
-function resolveStorageObjectPathFromFotoUrl(fotoUrl, bucketName) {
-  const normalized = normalizeText(fotoUrl)
-  if (!normalized) {
-    return null
-  }
-
-  let path = normalized
-
-  if (/^https?:\/\//i.test(path)) {
-    try {
-      const parsedUrl = new URL(path)
-      path = parsedUrl.pathname ?? ''
-    } catch {
-      return null
-    }
-  }
-
-  path = path.split('?')[0]?.split('#')[0] ?? ''
-  path = path.replace(/^\/+/, '')
-
-  if (!path) {
-    return null
-  }
-
-  const publicPrefix = `storage/v1/object/public/${bucketName}/`
-  const signPrefix = `storage/v1/object/sign/${bucketName}/`
-
-  if (path.startsWith(publicPrefix)) {
-    return decodeURIComponentSafe(path.slice(publicPrefix.length)).replace(/^\/+/, '')
-  }
-
-  if (path.startsWith(signPrefix)) {
-    return decodeURIComponentSafe(path.slice(signPrefix.length)).replace(/^\/+/, '')
-  }
-
-  const genericPublicPrefix = 'storage/v1/object/public/'
-  if (path.startsWith(genericPublicPrefix)) {
-    const afterPrefix = path.slice(genericPublicPrefix.length)
-    if (!afterPrefix.startsWith(`${bucketName}/`)) {
-      return null
-    }
-
-    return decodeURIComponentSafe(afterPrefix.slice(bucketName.length + 1)).replace(/^\/+/, '')
-  }
-
-  const genericSignPrefix = 'storage/v1/object/sign/'
-  if (path.startsWith(genericSignPrefix)) {
-    const afterPrefix = path.slice(genericSignPrefix.length)
-    if (!afterPrefix.startsWith(`${bucketName}/`)) {
-      return null
-    }
-
-    return decodeURIComponentSafe(afterPrefix.slice(bucketName.length + 1)).replace(/^\/+/, '')
-  }
-
-  if (path.startsWith(`${bucketName}/`)) {
-    return decodeURIComponentSafe(path.slice(bucketName.length + 1)).replace(/^\/+/, '')
-  }
-
-  return decodeURIComponentSafe(path).replace(/^\/+/, '')
 }
 
 async function createActivationSignedPhotoMap(adminSupabase, bucketName, rows) {
@@ -1366,7 +1235,7 @@ export function createAdminApiApp({ env = process.env, adminSupabase: injectedSu
   }
 
   async function requirePortalAuth(req, res, next) {
-    const profile = await (req.timing ? req.timing.measure('auth', () => resolvePortalUser(req)) : resolvePortalUser(req))
+    const profile = await resolvePortalUser(req)
     if (!profile) { jsonError(res, 401, 'Sesion invalida o usuario sin permisos.'); return }
     req.portalUser = profile
     next()
@@ -1478,9 +1347,7 @@ export function createAdminApiApp({ env = process.env, adminSupabase: injectedSu
       return
     }
 
-    res.setHeader('Cache-Control', 'private, no-store, max-age=0')
-    res.setHeader('CDN-Cache-Control', 'no-store')
-    res.setHeader('Vercel-CDN-Cache-Control', 'no-store')
+    sinCache(res)
     res.redirect(302, signedUrl)
   }))
 
@@ -1488,10 +1355,11 @@ export function createAdminApiApp({ env = process.env, adminSupabase: injectedSu
     return (users ?? []).map(({ auth_user_id, ...rest }) => ({ ...rest, cuenta_acceso_eliminada: auth_user_id == null }))
   }
 
-  app.use('/portal', serverTimingMiddleware, requirePortalAuth)
+  app.use('/portal', requirePortalAuth)
   app.get('/portal/me', asyncRoute(async (req, res) => {
     const [profile] = await attachUserRoles([req.portalUser])
-    const { auth_user_id, ...safeProfile } = profile ?? {}
+    const safeProfile = { ...profile }
+    delete safeProfile.auth_user_id
     res.json({ profile: safeProfile })
   }))
   app.get('/portal/plazas', asyncRoute(async (_req, res) => {
@@ -1524,20 +1392,10 @@ export function createAdminApiApp({ env = process.env, adminSupabase: injectedSu
     res.json({ users: withAccessFlag(await attachUserRoles(await enrichUsersWithOrganization(resolvedUsers))) })
   }))
   app.get('/portal/activations/export-excel', asyncRoute(async (req, res) => {
-    let alcance = null
-    if (req.portalUser.rol === 'lider') {
-      const { data: team, error: teamError } = await adminSupabase
-        .from('activadores')
-        .select('usuario_id')
-        .eq('lider_id', req.portalUser.usuario_id)
-      if (teamError) {
-        jsonError(res, 500, 'No se pudo resolver el equipo.', teamError.message)
-        return
-      }
-      alcance = {
-        userIds: (team ?? []).map((item) => item.usuario_id),
-        liderId: req.portalUser.usuario_id,
-      }
+    const { alcance, error: teamError } = await resolverAlcanceLider(adminSupabase, req.portalUser)
+    if (teamError) {
+      jsonError(res, 500, 'No se pudo resolver el equipo.', teamError.message)
+      return
     }
 
     const filters = {
@@ -1565,9 +1423,7 @@ export function createAdminApiApp({ env = process.env, adminSupabase: injectedSu
     })
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     res.setHeader('Content-Disposition', 'attachment; filename="activaciones.xlsx"')
-    res.setHeader('Cache-Control', 'private, no-store, max-age=0')
-    res.setHeader('CDN-Cache-Control', 'no-store')
-    res.setHeader('Vercel-CDN-Cache-Control', 'no-store')
+    sinCache(res)
     res.setHeader('X-Export-Row-Count', String(result.rowCount))
     res.setHeader('X-Export-Images', 'links')
     res.setHeader('X-Export-Version', 'links-v2')
@@ -1578,9 +1434,9 @@ export function createAdminApiApp({ env = process.env, adminSupabase: injectedSu
   app.get('/portal/activations/page', asyncRoute(async (req, res) => {
     const filtros = normalizarFiltros(req.query)
     const { page, pageSize } = parsearPagina(req.query)
-    const { alcance, error: teamError } = await req.timing.measure('team', () => resolverAlcanceLider(adminSupabase, req.portalUser))
+    const { alcance, error: teamError } = await resolverAlcanceLider(adminSupabase, req.portalUser)
     if (teamError) { jsonError(res, 500, 'No se pudo resolver el equipo.', teamError.message); return }
-    const ciudades = await req.timing.measure('ciudades', () => resolverCiudadesFiltro(obtenerCiudades, filtros))
+    const ciudades = await resolverCiudadesFiltro(obtenerCiudades, filtros)
     const construir = (select, options) => {
       let query = adminSupabase.from('activaciones').select(select, options)
       query = aplicarFiltrosActivaciones(query, filtros, ciudades)
@@ -1589,10 +1445,10 @@ export function createAdminApiApp({ env = process.env, adminSupabase: injectedSu
     const base = construir(SELECT_LISTADO_ACTIVACIONES, { count: 'exact' })
     if (!base) { res.json({ activations: [], total: 0, page, pageSize }); return }
     const from = (page - 1) * pageSize
-    const { data, count, error } = await req.timing.measure('db', () => base
+    const { data, count, error } = await base
       .order('created_at', { ascending: false })
       .order('id', { ascending: true })
-      .range(from, from + pageSize - 1))
+      .range(from, from + pageSize - 1)
     if (error?.code === 'PGRST103') {
       const { count: total } = await construir('id', { count: 'exact', head: true })
       res.json({ activations: [], total: total ?? 0, page, pageSize })
@@ -1603,7 +1459,7 @@ export function createAdminApiApp({ env = process.env, adminSupabase: injectedSu
   }))
 
   app.get('/portal/metrics/activations', asyncRoute(async (req, res) => {
-    const { alcance, error: teamError } = await req.timing.measure('team', () => resolverAlcanceLider(adminSupabase, req.portalUser))
+    const { alcance, error: teamError } = await resolverAlcanceLider(adminSupabase, req.portalUser)
     if (teamError) { jsonError(res, 500, 'No se pudo resolver el equipo.', teamError.message); return }
     const construirConsulta = (select, options) => {
       const query = adminSupabase.from('activaciones').select(select, options)
@@ -1611,12 +1467,12 @@ export function createAdminApiApp({ env = process.env, adminSupabase: injectedSu
     }
     let activations
     try {
-      activations = await req.timing.measure('db', () => cargarActivacionesMetricas({ construirConsulta, pageSize: metricsPageSize }))
+      activations = await cargarActivacionesMetricas({ construirConsulta, pageSize: metricsPageSize })
     } catch (error) {
       jsonError(res, 500, 'No se pudo obtener activaciones.', error?.message)
       return
     }
-    res.setHeader('Cache-Control', 'private, no-store, max-age=0')
+    sinCache(res)
     res.json({ activations, generatedAt: new Date().toISOString() })
   }))
 
@@ -1625,7 +1481,7 @@ export function createAdminApiApp({ env = process.env, adminSupabase: injectedSu
     if (teamError) { jsonError(res, 500, 'No se pudo resolver el equipo.', teamError.message); return }
     const rows = await fetchActivaciones(adminSupabase, normalizarFiltros(req.query), alcance)
     const conCorreo = await attachActivationCreatorEmail(adminSupabase, rows)
-    res.setHeader('Cache-Control', 'private, no-store, max-age=0')
+    sinCache(res)
     res.json({
       activations: conCorreo.map((row) => ({
         ...row,
@@ -2759,7 +2615,7 @@ export function createAdminApiApp({ env = process.env, adminSupabase: injectedSu
         jsonError(res, 400, 'El correo del cliente no es valido.')
         return
       }
-      if (updatePayload.telefono_cliente && !/^\+?[0-9\s()\-]{6,20}$/.test(updatePayload.telefono_cliente)) {
+      if (updatePayload.telefono_cliente && !/^\+?[0-9\s()-]{6,20}$/.test(updatePayload.telefono_cliente)) {
         jsonError(res, 400, 'El telefono no tiene un formato valido.')
         return
       }

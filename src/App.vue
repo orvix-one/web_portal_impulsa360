@@ -2,12 +2,11 @@
 import { useRoute, useRouter } from 'vue-router'
 import FeedbackCenter from './components/FeedbackCenter.vue'
 import { signOut, useAuth } from './lib/authStore'
-import { AUTH_ENABLED } from './lib/featureFlags'
 const route = useRoute(), router = useRouter(), { profile, loading, isAdmin } = useAuth()
 async function logout() { await signOut(); await router.replace('/login') }
 </script>
 <template>
-  <div v-if="AUTH_ENABLED && loading" class="auth-loading">Validando sesión...</div>
+  <div v-if="loading" class="auth-loading">Validando sesión...</div>
   <router-view v-else-if="route.meta.public" />
   <div v-else class="app-shell">
     <header class="topbar">
@@ -25,7 +24,7 @@ async function logout() { await signOut(); await router.replace('/login') }
         <router-link to="/activaciones">Activaciones</router-link>
         <router-link to="/impulsadores">Impulsadores</router-link>
         <router-link to="/metricas">Métricas</router-link>
-        <template v-if="!AUTH_ENABLED || isAdmin">
+        <template v-if="isAdmin">
           <router-link to="/usuarios">Usuarios</router-link>
           <router-link to="/equipos">Equipos</router-link>
           <router-link to="/plazas">Plazas</router-link>
@@ -33,7 +32,7 @@ async function logout() { await signOut(); await router.replace('/login') }
           <router-link to="/capacidad">Capacidad</router-link>
         </template>
       </nav>
-      <div v-if="AUTH_ENABLED && profile" class="topbar-zone session-user">
+      <div v-if="profile" class="topbar-zone session-user">
         <div class="session-copy"><span>{{ profile.nombre || profile.email }}</span><small>{{ profile.rol }}</small></div>
         <button class="boton" @click="logout">Cerrar sesión</button>
       </div>
