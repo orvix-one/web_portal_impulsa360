@@ -4,7 +4,8 @@ import { createClient } from '@supabase/supabase-js'
 import { fetchActivaciones, generateActivacionesExcel } from './activacionesExcel.js'
 import { aplicarAlcanceLider, esUuid, resolverAlcanceLider } from './alcanceLider.js'
 import { aplicarFiltrosActivaciones, crearCatalogoCiudades, normalizarFiltros, resolverCiudadesFiltro } from './activacionesFiltros.js'
-import { crearResolutorColumnasListado, parsearPagina } from './activacionesListado.js'
+import { SELECT_LISTADO_ACTIVACIONES, parsearPagina } from './activacionesListado.js'
+import { cargarActivacionesMetricas } from './metricasActivaciones.js'
 import { serverTimingMiddleware } from './serverTiming.js'
 import {
   activationClassificationUpdate,
@@ -980,7 +981,7 @@ function estimateCombinedActivationCapacity({
   }
 }
 
-export function createAdminApiApp({ env = process.env, adminSupabase: injectedSupabase = null } = {}) {
+export function createAdminApiApp({ env = process.env, adminSupabase: injectedSupabase = null, metricsPageSize = 1000 } = {}) {
   assertRequiredEnv(env)
 
   const allowedOrigins = buildAllowedOrigins(env.ADMIN_API_CORS_ORIGIN)
@@ -1522,29 +1523,6 @@ export function createAdminApiApp({ env = process.env, adminSupabase: injectedSu
     const resolvedUsers = users.map((item) => ({ ...item, lider_nombre: leaderNames.get(item.lider_id) ?? null }))
     res.json({ users: withAccessFlag(await attachUserRoles(await enrichUsersWithOrganization(resolvedUsers))) })
   }))
-  app.get('/portal/activations', asyncRoute(async (req, res) => {
-    const from = Math.max(0, Number.parseInt(String(req.query.from ?? '0'), 10) || 0)
-    const to = Math.min(from + 999, Math.max(from, Number.parseInt(String(req.query.to ?? from + 999), 10) || from + 999))
-    let query = adminSupabase.from('activaciones').select('*').order('created_at', { ascending: false }).order('id', { ascending: true })
-    if (req.portalUser.rol === 'lider') {
-      const { data: team, error: teamError } = await adminSupabase.from('activadores').select('usuario_id').eq('lider_id', req.portalUser.usuario_id)
-      if (teamError) { jsonError(res, 500, 'No se pudo resolver el equipo.', teamError.message); return }
-      const alcance = aplicarAlcanceLider(query, {
-        userIds: (team ?? []).map((item) => item.usuario_id),
-        liderId: req.portalUser.usuario_id,
-      })
-      if (!alcance) { res.json({ activations: [] }); return }
-      query = alcance
-    }
-    const { data, error } = await req.timing.measure('db', () => query.range(from, to))
-    if (error) { jsonError(res, 500, 'No se pudo obtener activaciones.', error.message); return }
-    try {
-      const conCorreo = await req.timing.measure('email', () => attachActivationCreatorEmail(adminSupabase, data ?? []))
-      res.json({ activations: await req.timing.measure('sign', () => attachActivationSignedPhotos(adminSupabase, activacionesBucket, conCorreo, env.EVIDENCE_LINK_SECRET)) })
-    } catch (photoError) {
-      jsonError(res, 500, 'No se pudo preparar enlaces seguros de evidencias.', photoError?.message)
-    }
-  }))
   app.get('/portal/activations/export-excel', asyncRoute(async (req, res) => {
     let alcance = null
     if (req.portalUser.rol === 'lider') {
@@ -1596,22 +1574,19 @@ export function createAdminApiApp({ env = process.env, adminSupabase: injectedSu
     res.send(Buffer.from(result.buffer))
   }))
 
-  // Listado paginado: columnas livianas, filtros en SQL, sin firmar fotos ni buscar correos.
   const obtenerCiudades = crearCatalogoCiudades(adminSupabase)
-  const resolverColumnasListado = crearResolutorColumnasListado(adminSupabase)
   app.get('/portal/activations/page', asyncRoute(async (req, res) => {
     const filtros = normalizarFiltros(req.query)
     const { page, pageSize } = parsearPagina(req.query)
     const { alcance, error: teamError } = await req.timing.measure('team', () => resolverAlcanceLider(adminSupabase, req.portalUser))
     if (teamError) { jsonError(res, 500, 'No se pudo resolver el equipo.', teamError.message); return }
     const ciudades = await req.timing.measure('ciudades', () => resolverCiudadesFiltro(obtenerCiudades, filtros))
-    const columnas = await req.timing.measure('columnas', resolverColumnasListado)
     const construir = (select, options) => {
       let query = adminSupabase.from('activaciones').select(select, options)
       query = aplicarFiltrosActivaciones(query, filtros, ciudades)
       return query && alcance ? aplicarAlcanceLider(query, alcance) : query
     }
-    const base = construir(columnas, { count: 'exact' })
+    const base = construir(SELECT_LISTADO_ACTIVACIONES, { count: 'exact' })
     if (!base) { res.json({ activations: [], total: 0, page, pageSize }); return }
     const from = (page - 1) * pageSize
     const { data, count, error } = await req.timing.measure('db', () => base
@@ -1627,8 +1602,24 @@ export function createAdminApiApp({ env = process.env, adminSupabase: injectedSu
     res.json({ activations: data ?? [], total: count ?? 0, page, pageSize })
   }))
 
-  // Filas completas del corte filtrado para CSV y Excel del navegador. Sin firmar fotos:
-  // solo enlaces de evidencia (HMAC en memoria).
+  app.get('/portal/metrics/activations', asyncRoute(async (req, res) => {
+    const { alcance, error: teamError } = await req.timing.measure('team', () => resolverAlcanceLider(adminSupabase, req.portalUser))
+    if (teamError) { jsonError(res, 500, 'No se pudo resolver el equipo.', teamError.message); return }
+    const construirConsulta = (select, options) => {
+      const query = adminSupabase.from('activaciones').select(select, options)
+      return alcance ? aplicarAlcanceLider(query, alcance) : query
+    }
+    let activations
+    try {
+      activations = await req.timing.measure('db', () => cargarActivacionesMetricas({ construirConsulta, pageSize: metricsPageSize }))
+    } catch (error) {
+      jsonError(res, 500, 'No se pudo obtener activaciones.', error?.message)
+      return
+    }
+    res.setHeader('Cache-Control', 'private, no-store, max-age=0')
+    res.json({ activations, generatedAt: new Date().toISOString() })
+  }))
+
   app.get('/portal/activations/export-rows', asyncRoute(async (req, res) => {
     const { alcance, error: teamError } = await resolverAlcanceLider(adminSupabase, req.portalUser)
     if (teamError) { jsonError(res, 500, 'No se pudo resolver el equipo.', teamError.message); return }
@@ -1644,7 +1635,6 @@ export function createAdminApiApp({ env = process.env, adminSupabase: injectedSu
     })
   }))
 
-  // Detalle de una activacion con correo y fotos firmadas (solo esta fila).
   app.get('/portal/activations/:id', asyncRoute(async (req, res) => {
     const id = String(req.params.id ?? '')
     if (!esUuid(id)) { jsonError(res, 400, 'Identificador de activacion invalido.'); return }

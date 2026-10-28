@@ -1,7 +1,6 @@
 import { etiquetaCiudadActivacion, normalizarPlazaClave, SIN_CIUDAD_REGISTRADA } from '../src/lib/plazas.js'
 
-// Filtros del listado de activaciones, aplicados en SQL. Reproducen la
-// semantica que antes vivia en el navegador (ActivacionesTable.vue).
+// Filtros del listado de activaciones aplicados en SQL, con la semantica que tenia el navegador.
 const FECHA = /^(\d{4}-\d{2}-\d{2})/
 
 function soloFecha(value) {
@@ -33,8 +32,6 @@ export function escaparLike(value) {
   return String(value).replace(/[\\%_]/g, (char) => `\\${char}`)
 }
 
-// Valores crudos de ciudad_activacion cuya etiqueta contiene la consulta
-// (misma regla que el filtro del navegador: clave normalizada + includes).
 export function ciudadesQueCoinciden(valoresCrudos, consulta) {
   const clave = normalizarPlazaClave(consulta)
   if (!clave) return null
@@ -58,7 +55,7 @@ function aplicarCiudades(query, { valores, incluirNulos }) {
   return query.or(`ciudad_activacion.is.null${lista ? `,ciudad_activacion.in.(${lista})` : ''}`)
 }
 
-// Devuelve null cuando ningun registro puede coincidir (resultado vacio).
+// Devuelve null cuando ningun registro puede coincidir.
 export function aplicarFiltrosActivaciones(query, filtros, ciudades = null) {
   if (filtros.fechaDesde) query = query.gte('fecha_activacion', filtros.fechaDesde)
   if (filtros.fechaHasta) query = query.lte('fecha_activacion', filtros.fechaHasta)
@@ -68,8 +65,6 @@ export function aplicarFiltrosActivaciones(query, filtros, ciudades = null) {
   return query
 }
 
-// Catalogo en memoria de valores distintos de ciudad_activacion (TTL corto,
-// una sola consulta en vuelo). Solo se consulta cuando se filtra por ciudad.
 export function crearCatalogoCiudades(adminSupabase, { ttlMs = 5 * 60 * 1000, now = Date.now } = {}) {
   let cache = null
   let pendiente = null

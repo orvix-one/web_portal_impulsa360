@@ -1,5 +1,4 @@
-// Mide fases de una peticion y las expone en la cabecera Server-Timing
-// (visible en DevTools > Network > Timing). Solo duraciones, sin datos.
+// Expone la duracion de cada fase de la peticion en la cabecera Server-Timing.
 const METRIC_NAME = /^[a-z0-9_-]+$/i
 
 export function formatServerTiming(metrics) {

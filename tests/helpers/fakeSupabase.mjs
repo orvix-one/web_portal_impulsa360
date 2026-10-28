@@ -1,5 +1,5 @@
-// Cliente Supabase en memoria para probar el API Express sin red.
-// Soporta solo lo que usan los handlers del portal; extender cuando haga falta.
+// Cliente Supabase en memoria que soporta solo lo que usan los handlers del portal.
+// Staging o Docker DB
 function splitTopLevel(text) {
   const parts = []
   let depth = 0
@@ -36,7 +36,7 @@ function evaluarTermino(row, term) {
   throw new Error(`fakeSupabase: operador no soportado en or(): ${term}`)
 }
 
-// LIKE de Postgres con \ como escape: % = cualquier cadena, _ = un caracter.
+// LIKE de Postgres: % = cualquier cadena, _ = un caracter, \ escapa.
 function patronLike(pattern) {
   let source = ''
   for (let i = 0; i < pattern.length; i += 1) {
@@ -111,10 +111,6 @@ class Query {
     this.window = [from, to]
     return this
   }
-  limit(count) {
-    this.window = [0, count - 1]
-    return this
-  }
   maybeSingle() {
     this.single = true
     return this
@@ -127,7 +123,10 @@ class Query {
     for (const { column, ascending } of [...this.orders].reverse()) {
       rows = [...rows].sort((a, b) => comparar(a[column], b[column]) * (ascending ? 1 : -1))
     }
-    if (this.window) rows = rows.slice(this.window[0], this.window[1] + 1)
+    if (this.window) {
+      this.db.calls.range.push([this.table, ...this.window])
+      rows = rows.slice(this.window[0], this.window[1] + 1)
+    }
     if (this.columns !== '*') {
       const keys = this.columns.split(',').map((key) => key.trim())
       rows = rows.map((row) => Object.fromEntries(keys.map((key) => [key, row[key]])))
@@ -144,7 +143,7 @@ class Query {
 }
 
 export function createFakeSupabase({ tables = {}, tokens = {} } = {}) {
-  const db = { tables, calls: { from: [], or: [], sign: [] } }
+  const db = { tables, calls: { from: [], or: [], sign: [], range: [] } }
   return {
     calls: db.calls,
     tables,

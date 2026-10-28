@@ -8,7 +8,7 @@ import {
   normalizarFiltros,
   resolverCiudadesFiltro,
 } from '../server/activacionesFiltros.js'
-import { columnasListado, parsearPagina } from '../server/activacionesListado.js'
+import { parsearPagina } from '../server/activacionesListado.js'
 import { etiquetaCiudadActivacion, normalizarPlazaClave } from '../src/lib/plazas.js'
 import { createFakeSupabase } from './helpers/fakeSupabase.mjs'
 
@@ -35,14 +35,7 @@ test('parsearPagina acota page y pageSize', () => {
   assert.deepEqual(parsearPagina({ page: 'x', pageSize: '0' }), { page: 1, pageSize: 50 })
 })
 
-test('columnasListado agrega solo los opcionales que existen en el esquema', () => {
-  assert.ok(!columnasListado(null).includes('nombre_comercio'))
-  const conComercio = columnasListado(new Set(['nombre_comercio', 'otra']))
-  assert.ok(conComercio.includes('nombre_comercio') && !conComercio.includes('resultado'))
-  assert.ok(['id', 'created_at', 'fecha_activacion', 'ciudad_activacion', 'hubo_error'].every((c) => conComercio.includes(c)))
-})
-
-// Oraculo: la regla que antes aplicaba el navegador (ActivacionesTable.vue).
+// Oraculo: la regla que aplicaba el navegador.
 const normalizeText = (v) => (typeof v === 'string' ? v.trim().toLowerCase() : '')
 function filtroNavegador(rows, f) {
   const plaza = normalizarPlazaClave(f.plaza)

@@ -1,13 +1,13 @@
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
 
 const props = defineProps({
   points: { type: Array, default: () => [] },
 })
 
 const mapElement = ref(null)
+// Leaflet se carga bajo demanda para no pesar en el resto del tablero.
+let L = null
 let map = null
 let heatLayer = null
 let tooltipLayer = null
@@ -47,6 +47,8 @@ async function renderPoints() {
 
 onMounted(async () => {
   if (map || !mapElement.value) return
+  const [{ default: leaflet }] = await Promise.all([import('leaflet'), import('leaflet/dist/leaflet.css')])
+  L = leaflet
   window.L = L
   await import('leaflet.heat')
   if (destroyed || map || !mapElement.value) return

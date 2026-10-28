@@ -26,7 +26,7 @@ async function mount(authorizedRows = rows, catalog = users, catalogError = fals
   let mounted, blob
   const deps = {
     computed, ref, watch, onMounted: (fn) => { mounted = fn },
-    fetchAllActivaciones: async () => structuredClone(authorizedRows),
+    fetchMetricasActivaciones: async () => structuredClone(authorizedRows),
     portalRequest: async (path) => {
       assert.equal(path, '/portal/users')
       if (catalogError) throw new Error('Catálogo no disponible')

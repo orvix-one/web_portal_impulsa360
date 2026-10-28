@@ -4,11 +4,10 @@
 //
 // PORTAL_TOKEN: access_token de una sesion iniciada (DevTools > Application >
 // Local Storage > sb-...-auth-token > access_token). No lo guardes en el repo.
-// Opciones: RUNS (default 5), PAGE_SIZE (default 1000), VERBOSE=1 (detalle por pagina).
+// Opciones: RUNS (default 5).
 const base = (process.env.PORTAL_BASE_URL ?? '').replace(/\/$/, '')
 const token = process.env.PORTAL_TOKEN ?? ''
 const runs = Number(process.env.RUNS ?? 5)
-const pageSize = Number(process.env.PAGE_SIZE ?? 1000)
 
 if (!base || !token) {
   console.error('Faltan PORTAL_BASE_URL y/o PORTAL_TOKEN (ver cabecera del script).')
@@ -50,23 +49,6 @@ async function request(path) {
   }
 }
 
-async function loadAllActivations() {
-  const pages = []
-  const inicio = performance.now()
-  for (let from = 0; ; from += pageSize) {
-    const page = await request(`/portal/activations?from=${from}&to=${from + pageSize - 1}`)
-    const rows = page.json?.activations?.length ?? 0
-    pages.push({ ...page, rows })
-    if (rows < pageSize) break
-  }
-  return {
-    elapsed: performance.now() - inicio,
-    pages,
-    bytes: pages.reduce((sum, page) => sum + page.bytes, 0),
-    rows: pages.reduce((sum, page) => sum + page.rows, 0),
-  }
-}
-
 const fila = (nombre, muestras, extra) => {
   const t = muestras.map((m) => m.elapsed)
   console.log(
@@ -79,17 +61,31 @@ console.log(`${base}  (${runs} runs)`)
 for (const path of ['/portal/me', '/portal/plazas', '/portal/users']) {
   const muestras = []
   for (let i = 0; i < runs; i += 1) muestras.push(await request(path))
-  fila(path, muestras, `${(muestras.at(-1).bytes / 1024).toFixed(0)} KB`)
+  const ultima = muestras.at(-1)
+  fila(path, muestras, `${(ultima.bytes / 1024).toFixed(0)} KB  encoding=${ultima.encoding}`)
+  if (ultima.timing) console.log(`  Server-Timing: ${ultima.timing}`)
 }
 
-const cargas = []
-for (let i = 0; i < runs; i += 1) cargas.push(await loadAllActivations())
-const ultima = cargas.at(-1)
-fila('activations (todas)', cargas, `${ultima.rows} filas, ${(ultima.bytes / 1024 / 1024).toFixed(1)} MB, ${ultima.pages.length} pag`)
-const timing = ultima.pages[0]?.timing
-if (timing) console.log(`  pag.1 Server-Timing: ${timing}`)
-if (process.env.VERBOSE) {
-  ultima.pages.forEach((page, n) =>
-    console.log(`  pag.${n + 1}: ${ms(page.elapsed)} ms, ${page.rows} filas, ${(page.bytes / 1024).toFixed(0)} KB, ${page.encoding}`),
+{
+  const muestras = []
+  for (let i = 0; i < runs; i += 1) muestras.push(await request('/portal/activations/page?page=1&pageSize=50'))
+  const ultima = muestras.at(-1)
+  fila(
+    'activations /page (50)',
+    muestras,
+    `${(ultima.bytes / 1024).toFixed(0)} KB  encoding=${ultima.encoding}${ultima.json ? '' : '  (sin JSON: endpoint no desplegado?)'}`,
   )
+  if (ultima.timing) console.log(`  Server-Timing: ${ultima.timing}`)
+}
+
+{
+  const muestras = []
+  for (let i = 0; i < runs; i += 1) muestras.push(await request('/portal/metrics/activations'))
+  const ultima = muestras.at(-1)
+  fila(
+    'metricas (todas)',
+    muestras,
+    `${ultima.json?.activations?.length ?? 0} filas, ${(ultima.bytes / 1024 / 1024).toFixed(2)} MB  encoding=${ultima.encoding}${ultima.json ? '' : '  (sin JSON: endpoint no desplegado?)'}`,
+  )
+  if (ultima.timing) console.log(`  Server-Timing: ${ultima.timing}`)
 }

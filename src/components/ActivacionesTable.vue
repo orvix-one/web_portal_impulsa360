@@ -111,7 +111,6 @@ function normalizeDateOnly(value) {
   return match ? match[1] : ''
 }
 
-// Los filtros se aplican en el servidor: la tabla muestra solo la pagina recibida.
 const filas = computed(() => props.activaciones)
 const totalPaginas = computed(() => Math.max(1, Math.ceil(props.total / props.pageSize)))
 const rangoVisible = computed(() => {

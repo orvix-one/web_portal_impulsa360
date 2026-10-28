@@ -4,32 +4,28 @@ import test from 'node:test'
 
 const serverSource = readFileSync(new URL('../server/app.js', import.meta.url), 'utf8')
 
-function portalActivationsHandler(source) {
-  const inicio = source.indexOf("app.get('/portal/activations',")
-  assert.ok(inicio >= 0, 'no se encontro GET /portal/activations')
-  const fin = source.indexOf("app.get('/portal/activations/export-excel'", inicio)
-  assert.ok(fin > inicio, 'no se encontro el fin del handler /portal/activations')
+const metricasSource = readFileSync(new URL('../server/metricasActivaciones.js', import.meta.url), 'utf8')
+
+function handlerPage(source) {
+  const inicio = source.indexOf("app.get('/portal/activations/page',")
+  assert.ok(inicio >= 0, 'no se encontro GET /portal/activations/page')
+  const fin = source.indexOf("app.get('/portal/activations/export-rows'", inicio)
+  assert.ok(fin > inicio, 'no se encontro el fin del handler /portal/activations/page')
   return source.slice(inicio, fin)
 }
 
-test('GET /portal/activations ordena por created_at DESC con id ASC como desempate estable', () => {
-  const handler = portalActivationsHandler(serverSource)
-  const ordenFecha = handler.indexOf(".order('created_at', { ascending: false })")
-  const ordenId = handler.indexOf(".order('id', { ascending: true })")
-  const rango = handler.indexOf('.range(from, to)')
-  assert.ok(ordenFecha >= 0, 'falta order created_at DESC')
-  assert.ok(ordenId >= 0, 'falta order id ASC como desempate')
-  assert.ok(ordenFecha < ordenId, 'el desempate por id debe ir despues del orden por created_at')
-  assert.ok(ordenId < rango, 'ambos order deben aplicarse antes de range (OFFSET)')
-})
-
-test('el contrato de paginacion from/to de fetchAllActivaciones se conserva', () => {
-  const handler = portalActivationsHandler(serverSource)
-  assert.match(handler, /req\.query\.from/)
-  assert.match(handler, /req\.query\.to/)
-  assert.match(handler, /Math\.min\(from \+ 999/)
-  assert.match(handler, /\.range\(from, to\)/)
-  assert.doesNotMatch(handler, /limit|offset/, 'la paginacion sigue siendo por range, no por limit/offset manuales')
+test('/page y /metrics ordenan por created_at DESC con id ASC como desempate estable, antes de range (OFFSET)', () => {
+  for (const [nombre, codigo] of [
+    ['/page', handlerPage(serverSource)],
+    ['/metrics', metricasSource],
+  ]) {
+    const ordenFecha = codigo.indexOf(".order('created_at', { ascending: false })")
+    const ordenId = codigo.indexOf(".order('id', { ascending: true })")
+    const rango = codigo.indexOf('.range(')
+    assert.ok(ordenFecha >= 0, `${nombre}: falta order created_at DESC`)
+    assert.ok(ordenId > ordenFecha, `${nombre}: el desempate por id va despues del orden por created_at`)
+    assert.ok(rango > ordenId, `${nombre}: ambos order se aplican antes de range`)
+  }
 })
 
 function ordenarActivaciones(rows) {
@@ -63,6 +59,9 @@ test('registros con created_at identico entre paginas no se omiten ni se duplica
   assert.deepEqual(ties, ['a', 'b', 'c', 'd'], 'los empates se resuelven por id ASC')
 
   const otroPlano = ordenarActivaciones([...filas].reverse())
-  assert.deepEqual(otroPlano.map((row) => row.id), ordenado.map((row) => row.id),
-    'el orden total es deterministico aunque la base devuelva los empates en otro orden')
+  assert.deepEqual(
+    otroPlano.map((row) => row.id),
+    ordenado.map((row) => row.id),
+    'el orden total es deterministico aunque la base devuelva los empates en otro orden',
+  )
 })

@@ -23,9 +23,26 @@ const perfil = (usuario_id, rol, extra = {}) => ({
   ...extra,
 })
 
-// ids de activacion con formato uuid (el detalle los valida)
 export const ACT = Object.fromEntries([1, 2, 3, 4, 5, 6].map((n) => [`f${n}`, `a0000000-0000-4000-8000-00000000000${n}`]))
-const fila = (n, extra) => ({ id: ACT[`f${n}`], nombre_comercio: null, foto_url: null, foto_cash_in: null, ...extra })
+const fila = (n, extra) => ({
+  id: ACT[`f${n}`],
+  foto_url: null,
+  foto_cash_in: null,
+  nombres_cliente: null,
+  apellidos_cliente: null,
+  tipo_activacion: null,
+  tipo_comercio: null,
+  tipo_tienda: null,
+  lider_nombre_registro: null,
+  equipo_id_registro: null,
+  equipo_numero_registro: null,
+  equipo_nombre_registro: null,
+  cash_in: false,
+  hubo_error: false,
+  latitud: null,
+  longitud: null,
+  ...extra,
+})
 
 export const TOKENS = {
   admin: 'tok-admin',
@@ -56,7 +73,6 @@ export function seedTables() {
       ciudad_activacion: 'la_paz',
       impulsador: 'Ana Pérez',
       zona_activacion: 'Centro',
-      nombre_comercio: 'Tienda Uno',
       foto_url: 'u1/a.jpg',
       foto_cash_in: 'u1/b.jpg',
     }),
@@ -131,10 +147,9 @@ export const TEST_ENV = {
   EVIDENCE_PUBLIC_BASE_URL: 'https://portal.test/api',
 }
 
-// Levanta la app real en un puerto efimero con un Supabase en memoria.
-export async function startPortal(tables = seedTables()) {
+export async function startPortal(tables = seedTables(), appOptions = {}) {
   const supabase = createFakeSupabase({ tables, tokens: tokensFor() })
-  const app = createAdminApiApp({ env: TEST_ENV, adminSupabase: supabase })
+  const app = createAdminApiApp({ env: TEST_ENV, adminSupabase: supabase, ...appOptions })
   const server = await new Promise((resolve) => {
     const s = app.listen(0, '127.0.0.1', () => resolve(s))
   })

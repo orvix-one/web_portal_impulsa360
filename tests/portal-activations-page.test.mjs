@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { SELECT_LISTADO_ACTIVACIONES } from '../server/activacionesListado.js'
 import { ACT, TOKENS, startPortal } from './helpers/portalApp.mjs'
 
 async function conPortal(fn) {
@@ -34,12 +35,11 @@ test('/page pagina con total, orden estable y sin firmar fotos ni buscar correos
     assert.ok(!('usuario_email' in p1.activations[0]) && !('foto_url_signed' in p1.activations[0]))
   }))
 
-test('/page devuelve solo columnas del listado y descubre las opcionales del esquema', () =>
+test('/page devuelve solo las columnas del listado', () =>
   conPortal(async ({ get }) => {
     const { activations } = await json(await get('/portal/activations/page?pageSize=1', TOKENS.admin))
     const columnas = Object.keys(activations[0])
-    assert.ok(columnas.includes('nombre_comercio'), 'columna opcional presente en el esquema')
-    assert.ok(!columnas.includes('resultado'), 'columna opcional ausente del esquema no se pide')
+    assert.deepEqual([...columnas].sort(), SELECT_LISTADO_ACTIVACIONES.split(',').sort())
     assert.ok(!columnas.includes('latitud') && !columnas.includes('foto_url') && !columnas.includes('lider_id_registro'))
   }))
 

@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { fetchAllActivaciones, portalRequest } from '../lib/activacionesService'
+import { fetchMetricasActivaciones, portalRequest } from '../lib/activacionesService'
 import MetricsHeatMap from './MetricsHeatMap.vue'
 import { ciudadActivacion, etiquetaCiudadActivacion, normalizarPlazaClave, SIN_CIUDAD_REGISTRADA } from '../lib/plazas'
 import { neutralizeSpreadsheetFormula } from '../lib/exportSafety'
@@ -64,7 +64,7 @@ onMounted(async () => {
   errorMsg.value = null
   try {
     const [rows, usersPayload, plazasPayload] = await Promise.all([
-      fetchAllActivaciones(),
+      fetchMetricasActivaciones(),
       portalRequest('/portal/users'),
       portalRequest('/portal/plazas').catch((error) => { logClientError('metricas.plazas', error); return null }),
     ])

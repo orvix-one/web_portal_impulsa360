@@ -1,8 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { startPortal, TOKENS, IDS, ACT } from './helpers/portalApp.mjs'
-
-// Red de seguridad HTTP: fija el contrato actual de /portal/* antes de refactorizar.
+import { startPortal, TOKENS, IDS } from './helpers/portalApp.mjs'
 
 async function conPortal(fn, tables) {
   const portal = await startPortal(tables)
@@ -36,54 +34,6 @@ test('GET /portal/me devuelve el perfil sin auth_user_id y con roles', () =>
     assert.equal(profile.usuario_id, IDS.lider)
     assert.ok(!('auth_user_id' in profile))
     assert.deepEqual(profile.roles, ['lider'])
-  }))
-
-test('GET /portal/activations: admin ve todo, ordenado por created_at DESC e id ASC', () =>
-  conPortal(async ({ get }) => {
-    const { activations } = await (await get('/portal/activations?from=0&to=999', TOKENS.admin)).json()
-    assert.deepEqual(
-      activations.map((row) => row.id),
-      [ACT.f1, ACT.f2, ACT.f3, ACT.f4, ACT.f5, ACT.f6],
-    )
-  }))
-
-test('GET /portal/activations: respeta from/to', () =>
-  conPortal(async ({ get }) => {
-    const { activations } = await (await get('/portal/activations?from=1&to=2', TOKENS.admin)).json()
-    assert.deepEqual(
-      activations.map((row) => row.id),
-      [ACT.f2, ACT.f3],
-    )
-  }))
-
-test('GET /portal/activations: el lider ve su historico y los nulos de su equipo actual', () =>
-  conPortal(async ({ get }) => {
-    const { activations } = await (await get('/portal/activations?from=0&to=999', TOKENS.lider)).json()
-    assert.deepEqual(
-      activations.map((row) => row.id),
-      [ACT.f1, ACT.f2, ACT.f5],
-    )
-  }))
-
-test('GET /portal/activations: agrega usuario_email y campos de foto firmada/evidencia', () =>
-  conPortal(async ({ get, supabase }) => {
-    const { activations } = await (await get('/portal/activations?from=0&to=999', TOKENS.admin)).json()
-    const f1 = activations.find((row) => row.id === ACT.f1)
-    assert.equal(f1.usuario_email, 'activador@test.bo')
-    assert.match(f1.foto_url_signed, /^https:\/\/signed\.test\/fotos-activaciones\/u1\/a\.jpg/)
-    assert.match(f1.foto_cash_in_signed, /u1\/b\.jpg/)
-    assert.ok(f1.foto_url_evidencia.startsWith(`/evidencia/${ACT.f1}/principal/`))
-    const f3 = activations.find((row) => row.id === ACT.f3)
-    assert.equal(f3.foto_url_signed, null)
-    assert.equal(f3.foto_url_evidencia, null)
-    assert.equal(supabase.calls.sign.length, 1, 'firma en un solo lote (<=100 rutas)')
-  }))
-
-test('GET /portal/activations: responde Server-Timing con auth, db, email, sign y total', () =>
-  conPortal(async ({ get }) => {
-    const response = await get('/portal/activations?from=0&to=999', TOKENS.admin)
-    const timing = response.headers.get('server-timing') ?? ''
-    for (const name of ['auth', 'db', 'email', 'sign', 'total']) assert.match(timing, new RegExp(`${name};dur=\\d`))
   }))
 
 test('GET /portal/activations/export-excel: cuenta filas segun alcance y filtros', () =>

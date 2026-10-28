@@ -19,8 +19,7 @@ export function aplicarAlcanceLider(query, alcance) {
   return query.or(expresion)
 }
 
-// Equipo actual del lider autenticado + su id, para acotar consultas de activaciones.
-// Otros roles (administrador, banco) no tienen alcance: devuelve { alcance: null }.
+// Administrador y banco no tienen alcance: devuelve { alcance: null }.
 export async function resolverAlcanceLider(adminSupabase, portalUser) {
   if (portalUser?.rol !== 'lider') return { alcance: null, error: null }
   const { data, error } = await adminSupabase.from('activadores').select('usuario_id').eq('lider_id', portalUser.usuario_id)

@@ -27,8 +27,7 @@ function evaluarExpresion(filas, expresion) {
   const equipo = equipoTexto.split(',').filter(Boolean)
   return filas.filter((row) => {
     if (historico && String(row.lider_id_registro) === historico) return true
-    return (row.lider_id_registro === null || row.lider_id_registro === undefined)
-      && equipo.includes(String(row.usuario_id))
+    return (row.lider_id_registro === null || row.lider_id_registro === undefined) && equipo.includes(String(row.usuario_id))
   })
 }
 
@@ -61,7 +60,12 @@ test('el equipo actual nunca autoriza sobre filas con snapshot de otro lider', (
 
 test('aplicarAlcanceLider consulta la expresion o deniega cuando no hay alcance', () => {
   const aplicaciones = []
-  const query = { or(expr) { aplicaciones.push(expr); return query } }
+  const query = {
+    or(expr) {
+      aplicaciones.push(expr)
+      return query
+    },
+  }
 
   assert.equal(aplicarAlcanceLider(query, null), query)
   assert.equal(aplicaciones.length, 0, 'el rol sin alcance (admin) mantiene acceso completo')
@@ -77,10 +81,7 @@ test('validacion: activador inhabilitado conserva su historial para el lider aut
   assert.deepEqual(idsAutorizados([integrante], lider), ['f1', 'f2', 'f5'])
   assert.deepEqual(idsAutorizados([], lider), ['f1', 'f2'], 'el historico propio no depende del equipo')
 
-  const serverSource = readFileSync(new URL('../server/app.js', import.meta.url), 'utf8')
-  const inicio = serverSource.indexOf("app.get('/portal/activations',")
-  const fin = serverSource.indexOf("app.get('/portal/activations/export-excel'", inicio)
-  const handler = serverSource.slice(inicio, fin)
+  const handler = manejador("app.get('/portal/metrics/activations'", "app.get('/portal/activations/export-rows'")
   const excelSource = readFileSync(new URL('../server/activacionesExcel.js', import.meta.url), 'utf8')
   assert.doesNotMatch(handler, /estado/)
   assert.doesNotMatch(excelSource, /estado/, 'la exportacion tampoco filtra por estado')
@@ -115,11 +116,22 @@ test('validacion: equipo vacio no permite acceso global', () => {
 function fakeSupabase(filas) {
   const consultas = []
   const query = {
-    select() { return query },
-    order() { return query },
-    gte() { return query },
-    lte() { return query },
-    or(expresion) { consultas.push(expresion); return query },
+    select() {
+      return query
+    },
+    order() {
+      return query
+    },
+    gte() {
+      return query
+    },
+    lte() {
+      return query
+    },
+    or(expresion) {
+      consultas.push(expresion)
+      return query
+    },
     async range(from, to) {
       const expresiones = consultas.filter((c) => typeof c === 'string')
       const base = expresiones.length ? evaluarExpresion(filas, expresiones.at(-1)) : filas
@@ -164,39 +176,41 @@ test('validacion: la exportacion devuelve exactamente el conjunto autorizado del
 
 const serverSource = readFileSync(new URL('../server/app.js', import.meta.url), 'utf8')
 
-function portalActivationsHandler(source) {
-  const inicio = source.indexOf("app.get('/portal/activations',")
-  assert.ok(inicio >= 0, 'no se encontro GET /portal/activations')
-  const fin = source.indexOf("app.get('/portal/activations/export-excel'", inicio)
-  assert.ok(fin > inicio, 'no se encontro el fin del handler /portal/activations')
-  return source.slice(inicio, fin)
+function manejador(desde, hasta) {
+  const inicio = serverSource.indexOf(desde)
+  assert.ok(inicio >= 0, `no se encontro ${desde}`)
+  const fin = serverSource.indexOf(hasta, inicio + desde.length)
+  assert.ok(fin > inicio, `no se encontro el fin tras ${desde}`)
+  return serverSource.slice(inicio, fin)
 }
 
-test('GET /portal/activations aplica el alcance del lider sin excluir por estado', () => {
-  const handler = portalActivationsHandler(serverSource)
-  assert.match(handler, /aplicarAlcanceLider\(query, \{\s*userIds:/)
-  assert.match(handler, /liderId: req\.portalUser\.usuario_id/)
-  assert.doesNotMatch(handler, /!ids\.length/, 'el equipo vacio ya no corta el historico')
-  assert.doesNotMatch(handler, /\.in\('usuario_id', ids\)/, 'el equipo actual no autoriza por si solo')
-  assert.doesNotMatch(handler, /estado/, 'el estado (activo/inhabilitado) nunca acota activaciones')
-})
+const FIN_HANDLERS_PORTAL = "app.use('/admin'"
+const handlersActivaciones = {
+  metricas: () => manejador("app.get('/portal/metrics/activations'", "app.get('/portal/activations/export-rows'"),
+  pagina: () => manejador("app.get('/portal/activations/page'", "app.get('/portal/metrics/activations'"),
+  exportRows: () => manejador("app.get('/portal/activations/export-rows'", "app.get('/portal/activations/:id'"),
+  detalle: () => manejador("app.get('/portal/activations/:id'", FIN_HANDLERS_PORTAL),
+}
 
-test('listado y exportacion resuelven equipo y lider con la misma fuente', () => {
-  const handler = portalActivationsHandler(serverSource)
-  const inicio = serverSource.indexOf("app.get('/portal/activations/export-excel'")
-  const fin = serverSource.indexOf("app.get('/portal/", inicio + 10)
-  const exportHandler = serverSource.slice(inicio, fin > inicio ? fin : serverSource.length)
-
-  for (const [nombre, tramo] of [['listado', handler], ['exportacion', exportHandler]]) {
-    assert.match(tramo, /\.from\('activadores'\)\s*\.select\('usuario_id'\)\s*\.eq\('lider_id', req\.portalUser\.usuario_id\)/, `${nombre}: mismo equipo actual`)
-    assert.match(tramo, /userIds:/, `${nombre}: recibe equipo actual`)
-    assert.match(tramo, /liderId: req\.portalUser\.usuario_id/, `${nombre}: recibe el lider autenticado`)
+test('metricas, listado y exportacion resuelven el alcance del lider con el mismo helper y sin excluir por estado', () => {
+  for (const nombre of ['metricas', 'pagina', 'exportRows', 'detalle']) {
+    const tramo = handlersActivaciones[nombre]()
+    assert.match(tramo, /resolverAlcanceLider\(adminSupabase, req\.portalUser\)/, `${nombre}: alcance del lider autenticado`)
+    assert.doesNotMatch(tramo, /estado/, `${nombre}: el estado (activo/inhabilitado) nunca acota activaciones`)
+    assert.doesNotMatch(tramo, /\.in\('usuario_id', ids\)/, `${nombre}: el equipo actual no autoriza por si solo`)
   }
-  assert.match(exportHandler, /\n\s+alcance,/)
-  assert.doesNotMatch(exportHandler, /allowedUserIds/)
+  assert.match(handlersActivaciones.metricas(), /aplicarAlcanceLider\(query, alcance\)/)
 })
 
-test('GET /portal/activations enriquece cada fila con el correo del activador', () => {
+test('el helper de alcance deriva el equipo actual y el lider autenticado, sin estado', () => {
+  const alcanceSource = readFileSync(new URL('../server/alcanceLider.js', import.meta.url), 'utf8')
+  const funcion = alcanceSource.slice(alcanceSource.indexOf('export async function resolverAlcanceLider'))
+  assert.match(funcion, /\.from\('activadores'\)\.select\('usuario_id'\)\.eq\('lider_id', portalUser\.usuario_id\)/)
+  assert.match(funcion, /liderId: portalUser\.usuario_id/)
+  assert.doesNotMatch(funcion, /estado/)
+})
+
+test('el detalle de una activacion enriquece la fila con el correo del activador', () => {
   const funcion = serverSource.slice(
     serverSource.indexOf('async function attachActivationCreatorEmail'),
     serverSource.indexOf('function buildEvidenceLinkPath'),
@@ -205,8 +219,12 @@ test('GET /portal/activations enriquece cada fila con el correo del activador', 
   assert.match(funcion, /usuario_email/)
   assert.doesNotMatch(funcion, /\.eq\('estado'/, 'los correos no dependen del estado del perfil')
 
-  const handler = portalActivationsHandler(serverSource)
-  assert.match(handler, /attachActivationCreatorEmail\(adminSupabase/)
+  assert.match(handlersActivaciones.detalle(), /attachActivationCreatorEmail\(adminSupabase/)
+  assert.doesNotMatch(
+    handlersActivaciones.metricas(),
+    /attachActivationCreatorEmail|attachActivationSignedPhotos/,
+    'las metricas no buscan correos ni firman fotos',
+  )
 })
 
 const tableSource = readFileSync(new URL('../src/components/ActivacionesTable.vue', import.meta.url), 'utf8')
@@ -220,8 +238,11 @@ test('el detalle muestra Correo del activador en lugar de ID del usuario', () =>
   assert.match(tecnica, /usuario_email/)
   assert.doesNotMatch(tecnica, /usuario_id/, 'el identificador crudo sale del bloque tecnico')
   assert.match(tableSource, /usuario_email: 'Correo del activador'/)
-  assert.match(tableSource, /tieneValor\(row\.usuario_email\) \? new Set\(\['usuario_id'\]\)/,
-    'si no hay correo, el ID del usuario queda como unico identificador visible')
+  assert.match(
+    tableSource,
+    /tieneValor\(row\.usuario_email\) \? new Set\(\['usuario_id'\]\)/,
+    'si no hay correo, el ID del usuario queda como unico identificador visible',
+  )
 })
 
 const metricsSource = readFileSync(new URL('../src/components/MetricsDashboard.vue', import.meta.url), 'utf8')
@@ -245,6 +266,9 @@ test('las metricas reproducen la misma regla de alcance por lider', () => {
 
   const catalogoInicio = metricsSource.indexOf('const catalogoActivadores = computed(')
   const catalogoFin = metricsSource.indexOf('function estadoNormalizado', catalogoInicio)
-  assert.doesNotMatch(metricsSource.slice(catalogoInicio, catalogoFin), /\.estado/,
-    'el catalogo de activadores ignora el estado del perfil')
+  assert.doesNotMatch(
+    metricsSource.slice(catalogoInicio, catalogoFin),
+    /\.estado/,
+    'el catalogo de activadores ignora el estado del perfil',
+  )
 })
