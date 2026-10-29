@@ -16,7 +16,7 @@
 ## Docs to trust
 
 - `ARCHITECTURE.md` (layout, practices, wishlist).
-- `docs/esquema-remoto.md` (real remote schemas; read one table with `(set -a; . ./.env; set +a; curl -s "$SUPABASE_URL/rest/v1/" -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" | jq '.definitions.<table>')`)
+- `supabase/README.md` (migration workflow) and `supabase/migrations/` (baseline of prod, 2026-10-29, plus later migrations). `supabase/legacy/` is pre-baseline history.
 - `docs/bitacora_sesion.md` is stale (2026-03).
 
 ## Conventions
