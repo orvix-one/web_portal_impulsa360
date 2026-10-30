@@ -215,7 +215,9 @@ function abrirPlazaTemporal(usuario) {
   plazaTemporalForm.value = { plaza_temporal: '', tipo_zona: 'punto_temporal', ciudad_plaza: usuario.plaza_nombre || usuario.plaza_base || usuario.plaza || '', inicio: '', fin: '', motivo: '', activo: true }
 }
 function cerrarPlazaTemporal() { if (!procesando.value) usuarioPlazaTemporal.value = null }
-async function cambiarPlazaTemporal(usuario, enabled) {
+async function cambiarPlazaTemporal(usuario, event) {
+  const enabled = event.target.checked
+  event.target.checked = usuario.plaza_temporal_activa === true
   if (enabled) { abrirPlazaTemporal(usuario); return }
   procesando.value = true
   try {
@@ -344,7 +346,7 @@ onMounted(cargarUsuarios)
             <td>{{ equiposDelUsuario(usuario) }}</td><td>{{ nombreLider(usuario) }}</td><td>{{ usuario.facturador_nombre || '-' }}</td><td>{{ rolesUsuario(usuario).map(etiqueta).join(', ') }}</td>
             <td>{{ esRol(usuario, 'lider') ? (usuario.puede_activar === true ? 'Sí' : 'No') : '-' }}</td>
             <td><span class="estado-etiqueta" :class="`estado-${usuario.estado ?? 'activo'}`">{{ etiqueta(usuario.estado ?? 'activo') }}</span></td><td>-</td>
-            <td><div class="acciones"><label v-if="esRol(usuario, 'activador')" class="scope-pill"><input type="checkbox" :checked="usuario.plaza_temporal_activa" :disabled="procesando" @change="cambiarPlazaTemporal(usuario, $event.target.checked)"> Plaza temporal</label><button class="boton boton-editar" :disabled="procesando" @click="editarUsuario(usuario)">Editar</button><button v-if="(usuario.estado ?? 'activo') === 'activo'" class="boton boton-eliminar" :disabled="procesando" @click="abrirInhabilitacion(usuario)">Inhabilitar</button><button v-else class="boton boton-guardar" :disabled="procesando" @click="activarUsuario(usuario)">Activar</button><button v-if="(usuario.estado ?? 'activo') !== 'activo' && !usuario.cuenta_acceso_eliminada" class="boton boton-eliminar" :disabled="procesando" @click="eliminarCuenta(usuario)">Eliminar cuenta</button><span v-else-if="usuario.cuenta_acceso_eliminada" class="scope-pill">Cuenta eliminada</span></div></td>
+            <td><div class="acciones"><label v-if="esRol(usuario, 'activador')" class="scope-pill"><input type="checkbox" :checked="usuario.plaza_temporal_activa" :disabled="procesando" @change="cambiarPlazaTemporal(usuario, $event)"> Plaza temporal</label><button class="boton boton-editar" :disabled="procesando" @click="editarUsuario(usuario)">Editar</button><button v-if="(usuario.estado ?? 'activo') === 'activo'" class="boton boton-eliminar" :disabled="procesando" @click="abrirInhabilitacion(usuario)">Inhabilitar</button><button v-else class="boton boton-guardar" :disabled="procesando" @click="activarUsuario(usuario)">Activar</button><button v-if="(usuario.estado ?? 'activo') !== 'activo' && !usuario.cuenta_acceso_eliminada" class="boton boton-eliminar" :disabled="procesando" @click="eliminarCuenta(usuario)">Eliminar cuenta</button><span v-else-if="usuario.cuenta_acceso_eliminada" class="scope-pill">Cuenta eliminada</span></div></td>
           </template>
         </tr>
       </tbody></table></div>

@@ -155,5 +155,10 @@ export async function startPortal(tables = seedTables(), appOptions = {}) {
   })
   const base = `http://127.0.0.1:${server.address().port}`
   const get = (path, token) => fetch(`${base}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-  return { supabase, get, close: () => new Promise((resolve) => server.close(resolve)) }
+  const post = (path, token, body) => fetch(`${base}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  })
+  return { supabase, get, post, close: () => new Promise((resolve) => server.close(resolve)) }
 }

@@ -61,3 +61,22 @@ test('GET /portal/users: el lider solo ve a su equipo', () =>
       [IDS.activador],
     )
   }))
+
+const asignacionTemporal = {
+  plaza_temporal: 'Unifranz',
+  tipo_zona: 'universidad',
+  motivo: 'Evento',
+  inicio: '2026-10-30T13:00:00.000Z',
+  fin: '2026-10-31T03:59:00.000Z',
+}
+
+test('POST temporary-plaza: acepta a un lider activo y rechaza a un usuario inactivo', () =>
+  conPortal(async ({ post, supabase }) => {
+    const ok = await post(`/admin/users/${IDS.lider}/temporary-plaza`, TOKENS.admin, asignacionTemporal)
+    assert.equal(ok.status, 201)
+    assert.equal(supabase.tables.activador_plaza_temporal.length, 1)
+
+    const rechazado = await post(`/admin/users/${IDS.inactivo}/temporary-plaza`, TOKENS.admin, asignacionTemporal)
+    assert.equal(rechazado.status, 400)
+    assert.equal(supabase.tables.activador_plaza_temporal.length, 1)
+  }))

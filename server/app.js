@@ -2030,9 +2030,9 @@ export function createAdminApiApp({ env = process.env, adminSupabase: injectedSu
         return
       }
       const { data: user, error: userError } = await adminSupabase.from('activadores')
-        .select('usuario_id,rol,estado').eq('usuario_id', userId).maybeSingle()
-      if (userError || !user || user.rol !== 'activador' || user.estado !== 'activo') {
-        jsonError(res, 400, 'La plaza temporal solo puede asignarse a un activador activo.', userError?.message)
+        .select('usuario_id,estado').eq('usuario_id', userId).maybeSingle()
+      if (userError || !user || user.estado !== 'activo') {
+        jsonError(res, 400, 'La plaza temporal solo puede asignarse a un usuario activo.', userError?.message)
         return
       }
       const temporaryPlazaId = await resolveOrCreatePlaza(plazaTemporal)

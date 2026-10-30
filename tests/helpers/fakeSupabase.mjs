@@ -112,12 +112,24 @@ class Query {
     return this
   }
   maybeSingle() {
-    this.single = true
+    this.wantsSingle = true
+    return this
+  }
+  single() {
+    return this.maybeSingle()
+  }
+  insert(row) {
+    this.inserted = row
     return this
   }
 
   run() {
     this.db.calls.from.push(this.table)
+    if (this.inserted) {
+      const created = { id: `${this.table}-${(this.db.tables[this.table]?.length ?? 0) + 1}`, ...this.inserted }
+      this.db.tables[this.table] = [...(this.db.tables[this.table] ?? []), created]
+      return { data: created, error: null }
+    }
     let rows = (this.db.tables[this.table] ?? []).filter((row) => this.predicates.every((predicate) => predicate(row)))
     const count = rows.length
     for (const { column, ascending } of [...this.orders].reverse()) {
@@ -131,7 +143,7 @@ class Query {
       const keys = this.columns.split(',').map((key) => key.trim())
       rows = rows.map((row) => Object.fromEntries(keys.map((key) => [key, row[key]])))
     }
-    if (this.single) return { data: rows[0] ?? null, error: null }
+    if (this.wantsSingle) return { data: rows[0] ?? null, error: null }
     return { data: this.headOnly ? null : rows, error: null, count: this.countMode ? count : null }
   }
 
