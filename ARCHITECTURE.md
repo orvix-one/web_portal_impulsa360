@@ -8,7 +8,7 @@ Vue SPA → `/api` (Express, one Vercel function in `gru1`) → Supabase. The AP
 
 - `src/pages`, `src/components`, `src/lib`: the SPA (views, components, shared logic).
 - `server/app.js`: the API (`/portal/*` scoped reads, `/admin/*` writes, `/evidencia/*` photo links). Helpers in `server/*.js`.
-- `api/index.js`: Vercel entry. `tests/`: `node:test`. `docs/`: diagnostics. `supabase/`: schema and migrations (with README).
+- `api/index.js`: Vercel entry. `tests/`: `node:test`. `supabase/`: schema and migrations (with README).
 
 ## Practices
 

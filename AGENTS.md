@@ -17,7 +17,6 @@
 
 - `ARCHITECTURE.md` (layout, practices).
 - `supabase/README.md` (migration workflow) and `supabase/migrations/` (baseline of prod, 2026-10-29, plus later migrations). `supabase/legacy/` is pre-baseline history.
-- `docs/bitacora_sesion.md` is stale (2026-03).
 
 ## Conventions
 
