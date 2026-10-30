@@ -6,6 +6,7 @@ import { aplicarAlcanceLider, esUuid, resolverAlcanceLider } from './alcanceLide
 import { resolveStorageObjectPathFromFotoUrl } from './storagePaths.js'
 import { aplicarFiltrosActivaciones, crearCatalogoCiudades, normalizarFiltros, resolverCiudadesFiltro } from './activacionesFiltros.js'
 import { SELECT_LISTADO_ACTIVACIONES, parsearPagina } from './activacionesListado.js'
+import { parsearAliasesPlaza } from '../src/lib/plazas.js'
 import { cargarActivacionesMetricas } from './metricasActivaciones.js'
 import {
   activationClassificationUpdate,
@@ -1964,7 +1965,7 @@ export function createAdminApiApp({ env = process.env, adminSupabase: injectedSu
 
   // Plazas: listar, crear, editar (activar/desactivar)
   app.get('/admin/plazas', asyncRoute(async (_req, res) => {
-    const { data, error } = await adminSupabase.from('plazas').select('id,nombre,nombre_normalizado,activa').order('nombre')
+    const { data, error } = await adminSupabase.from('plazas').select('id,nombre,nombre_normalizado,activa,es_ciudad_geografica,aliases').order('nombre')
     if (error) {
       if (isMissingOrganizationSchema(error)) { jsonError(res, 409, 'El modelo organizacional no esta habilitado.', error.message); return }
       jsonError(res, 500, 'No se pudo obtener las plazas.', error.message); return
@@ -1980,7 +1981,12 @@ export function createAdminApiApp({ env = process.env, adminSupabase: injectedSu
       const { data: existing, error: existingErr } = await adminSupabase.from('plazas').select('id').eq('nombre_normalizado', nombre_normalizado).maybeSingle()
       if (existingErr) { throw existingErr }
       if (existing) { jsonError(res, 409, 'Ya existe una plaza con ese nombre.'); return }
-      const { data: created, error: createErr } = await adminSupabase.from('plazas').insert({ nombre, nombre_normalizado }).select('*').single()
+      const { data: created, error: createErr } = await adminSupabase.from('plazas').insert({
+        nombre,
+        nombre_normalizado,
+        es_ciudad_geografica: req.body?.es_ciudad_geografica === true,
+        aliases: parsearAliasesPlaza(req.body?.aliases),
+      }).select('*').single()
       if (createErr) { throw createErr }
       res.status(201).json({ plaza: created })
     } catch (err) {
@@ -1997,6 +2003,8 @@ export function createAdminApiApp({ env = process.env, adminSupabase: injectedSu
     const updates = {}
     if (nombre != null) updates.nombre = nombre
     if (typeof activa === 'boolean') updates.activa = activa
+    if (typeof req.body?.es_ciudad_geografica === 'boolean') updates.es_ciudad_geografica = req.body.es_ciudad_geografica
+    if (req.body?.aliases !== undefined) updates.aliases = parsearAliasesPlaza(req.body.aliases)
     if (Object.keys(updates).length === 0) { jsonError(res, 400, 'Nada que actualizar.'); return }
     if (updates.nombre) updates.nombre_normalizado = normalizeOrganizationName(updates.nombre)
     const { error } = await adminSupabase.from('plazas').update(updates).eq('id', plazaId)

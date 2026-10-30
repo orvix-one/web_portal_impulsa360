@@ -9,13 +9,15 @@ const { session } = useAuth()
 const plazas = ref([])
 const loading = ref(false)
 const procesando = ref(false)
-const nuevo = ref({ nombre: '' })
+const nuevo = ref(plazaVacia())
 const editandoId = ref(null)
 const edicion = ref({})
 const eliminandoId = ref(null)
 const modalReasignar = ref(false)
 const plazaPendiente = ref(null)
 const plazaDestino = ref('')
+
+function plazaVacia() { return { nombre: '', es_ciudad_geografica: false, aliases: '' } }
 
 function request(path, options = {}) {
   return adminApiRequest({ baseUrl: apiBaseUrl, path, token: session.value?.access_token, ...options })
@@ -41,8 +43,8 @@ async function crear() {
   if (!nuevo.value.nombre.trim()) { notifyWarning('Nombre de plaza es obligatorio.'); return }
   procesando.value = true
   try {
-    await request('/admin/plazas', { method: 'POST', body: { nombre: nuevo.value.nombre.trim() } })
-    nuevo.value = { nombre: '' }
+    await request('/admin/plazas', { method: 'POST', body: { ...nuevo.value, nombre: nuevo.value.nombre.trim() } })
+    nuevo.value = plazaVacia()
     await cargar(); notifySuccess('Plaza creada correctamente.')
   } catch (error) { notifyError(errorMessage(error)) }
   finally { procesando.value = false }
@@ -50,14 +52,19 @@ async function crear() {
 
 function editar(plaza) {
   editandoId.value = plaza.id
-  edicion.value = { nombre: plaza.nombre, activa: plaza.activa }
+  edicion.value = {
+    nombre: plaza.nombre,
+    activa: plaza.activa,
+    es_ciudad_geografica: plaza.es_ciudad_geografica === true,
+    aliases: (plaza.aliases ?? []).join(', '),
+  }
 }
 function cancelar() { editandoId.value = null; edicion.value = {} }
 async function guardar(plaza) {
   if (!edicion.value.nombre || typeof edicion.value.activa !== 'boolean') { notifyWarning('Nombre y estado son obligatorios.'); return }
   procesando.value = true
   try {
-    await request(`/admin/plazas/${plaza.id}`, { method: 'PATCH', body: { nombre: edicion.value.nombre, activa: edicion.value.activa } })
+    await request(`/admin/plazas/${plaza.id}`, { method: 'PATCH', body: edicion.value })
     cancelar(); await cargar(); notifySuccess('Plaza actualizada correctamente.')
   } catch (error) { notifyError(errorMessage(error)) }
   finally { procesando.value = false }
@@ -125,6 +132,8 @@ onMounted(cargar)
     <div class="forms-grid">
       <div class="formulario-registro"><h2 class="subtitulo">Crear plaza</h2><form class="formulario-campos" @submit.prevent="crear">
         <input v-model="nuevo.nombre" placeholder="Nombre de plaza" class="input-texto">
+        <label><input v-model="nuevo.es_ciudad_geografica" type="checkbox"> Ciudad visible en la app móvil</label>
+        <input v-if="nuevo.es_ciudad_geografica" v-model="nuevo.aliases" placeholder="Aliases GPS, separados por coma" class="input-texto">
         <button class="boton boton-primario" :disabled="procesando">Crear plaza</button>
       </form></div>
     </div>
@@ -132,16 +141,20 @@ onMounted(cargar)
     <p v-if="loading">Cargando plazas...</p>
     <div v-else class="panel-card tabla-contenedor">
       <div class="toolbar-line"><h2 class="subtitulo subtitulo-inline">Plazas</h2><span class="meta-pill">{{ plazas.length }}</span></div>
-      <div class="table-wrap modulo-table-wrap"><table><thead><tr><th>Nombre</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
+      <div class="table-wrap modulo-table-wrap"><table><thead><tr><th>Nombre</th><th>Estado</th><th>Ciudad en app</th><th>Aliases GPS</th><th>Acciones</th></tr></thead><tbody>
         <tr v-for="plaza in plazas" :key="plaza.id">
           <template v-if="editandoId === plaza.id">
             <td><input v-model="edicion.nombre" class="input-editar"></td>
             <td><select v-model="edicion.activa" class="input-editar"><option :value="true">Activa</option><option :value="false">Inactiva</option></select></td>
+            <td><select v-model="edicion.es_ciudad_geografica" class="input-editar"><option :value="true">Sí</option><option :value="false">No</option></select></td>
+            <td><input v-model="edicion.aliases" placeholder="Separados por coma" class="input-editar"></td>
             <td><button class="boton boton-guardar" :disabled="procesando" @click="guardar(plaza)">Guardar</button><button class="boton boton-cancelar" @click="cancelar">Cancelar</button></td>
           </template>
           <template v-else>
             <td>{{ plaza.nombre }}</td>
             <td><span class="scope-pill" :class="plaza.activa ? 'scope-pill-all' : 'scope-pill-user'">{{ plaza.activa ? 'Activa' : 'Inactiva' }}</span></td>
+            <td>{{ plaza.es_ciudad_geografica ? 'Sí' : 'No' }}</td>
+            <td>{{ (plaza.aliases ?? []).join(', ') }}</td>
             <td>
               <button class="boton boton-editar" @click="editar(plaza)">Editar</button>
               <button class="boton" :disabled="procesando" @click="cambiarEstado(plaza)">{{ plaza.activa ? 'Desactivar' : 'Activar' }}</button>
